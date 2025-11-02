@@ -21,7 +21,7 @@ const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeMod
           <Text inverse color="green">{" "}running{" "}</Text>
         )}
         {processInfo && processInfo.hasEditor && (
-          <Text color="cyan">vim</Text>
+          <Text inverse color="cyan">{" "}vim{" "}</Text>
         )}
         {modulesInfo && modulesInfo.exists && (
           <Text color="magenta">deps {modulesInfo.sizeFormatted}</Text>

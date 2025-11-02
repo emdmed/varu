@@ -8,6 +8,7 @@ import { getTerminalsInPath } from './commands/process-monitor.js';
 import { useScreenSize } from "./hooks/useScreenSize.js";
 import { getNodeModulesSize } from './utils/folder-size.js';
 import Project from './components/project.js';
+import ProjectDetails from './components/project-details.js';
 
 const VERSION = "0.0.6"
 const App = () => {
@@ -340,10 +341,12 @@ const App = () => {
 
             {projects.slice(scrollOffset, scrollOffset + VISIBLE_ITEMS).map((project, index) => <Project
               index={index}
+              key={index}
               project={project}
               selectedIndex={selectedIndex}
               runningProcesses={runningProcesses}
               nodeModulesSizes={nodeModulesSizes}
+              scrollOffset={scrollOffset}
             />)}
 
             {scrollOffset + VISIBLE_ITEMS < projects.length && (
@@ -357,63 +360,7 @@ const App = () => {
         )}
       </Box>
 
-      {view === 'details' && selectedProject && (
-        <Box
-          flexDirection="column"
-          marginBottom={1}
-          borderStyle="round"
-          borderColor="yellow"
-          paddingX={1}
-          paddingY={0}
-        >
-          <Text bold color="yellow">Project Details:</Text>
-          <Text>
-            <Text bold>Name: </Text>
-            {selectedProject.projectName}
-          </Text>
-          <Text>
-            <Text bold>Framework: </Text>
-            {selectedProject.framework}
-          </Text>
-          <Text>
-            <Text bold>Path: </Text>
-            <Text color="gray">{selectedProject.path}</Text>
-          </Text>
-          {selectedProject.command !== 'N/A' && (
-            <Text>
-              <Text bold>Command: </Text>
-              <Text color="green">{selectedProject.command}</Text>
-            </Text>
-          )}
-          {selectedProject.gitBranch && (
-            <Text>
-              <Text bold>Git Branch: </Text>
-              <Text color="yellow">{selectedProject.gitBranch}</Text>
-            </Text>
-          )}
-          {selectedProject.availableBranches?.length > 0 && (
-            <Text>
-              <Text bold>Other Branches: </Text>
-              <Text color="gray">
-                {selectedProject.availableBranches.slice(0, 3).join(', ')}
-                {selectedProject.availableBranches.length > 3 && '...'}
-              </Text>
-            </Text>
-          )}
-          {nodeModulesSizes[selectedProject.path] && (
-            <Text>
-              <Text bold>node_modules: </Text>
-              {nodeModulesSizes[selectedProject.path].exists ? (
-                <Text color="magenta">
-                  {nodeModulesSizes[selectedProject.path].sizeFormatted}
-                </Text>
-              ) : (
-                <Text color="gray">Not installed</Text>
-              )}
-            </Text>
-          )}
-        </Box>
-      )}
+      {view === 'details' && selectedProject && <ProjectDetails selectedProject={selectedProject} nodeModulesSizes={nodeModulesSizes} />}
 
       <Box
         flexDirection="column"

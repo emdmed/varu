@@ -9,8 +9,9 @@ import { useScreenSize } from "./hooks/useScreenSize.js";
 import { getNodeModulesSize } from './utils/folder-size.js';
 import Project from './components/project.js';
 import ProjectDetails from './components/project-details.js';
+import SearchInput from './components/search/search-input.js';
 
-const VERSION = "0.0.7"
+const VERSION = "0.0.8"
 const App = () => {
   const { configuration, isConfig, loading } = useConfig();
   const [projects, setProjects] = useState([]);
@@ -24,12 +25,22 @@ const App = () => {
   const [scrollOffset, setScrollOffset] = useState(0);
   const [runningProcesses, setRunningProcesses] = useState({});
   const [nodeModulesSizes, setNodeModulesSizes] = useState({});
+  const [searchMode, setSearchMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const reservedLines = 3 + 2 + 2 + 4 + 2; // base UI elements
   const detailsLines = (view === 'details' && projects[selectedIndex]) ? 10 : 0;
+  const searchLines = searchMode ? 2 : 0; // space for search input
   const scrollIndicatorLines = 2; // space for scroll indicators
-  const availableLines = Math.max(5, size.height - reservedLines - detailsLines - scrollIndicatorLines);
+  const availableLines = Math.max(5, size.height - reservedLines - detailsLines - searchLines - scrollIndicatorLines);
   const VISIBLE_ITEMS = Math.max(5, availableLines); // minimum 5 items
+
+  // Filter projects based on search query
+  const filteredProjects = searchQuery
+    ? projects.filter(project =>
+      project.projectName.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    : projects;
 
   // Clear success message after 3 seconds
   useEffect(() => {
@@ -63,6 +74,14 @@ const App = () => {
         .finally(() => setScanning(false));
     }
   }, [isConfig, configuration]);
+
+  // Reset selectedIndex when search results change
+  useEffect(() => {
+    if (searchQuery && filteredProjects.length > 0) {
+      setSelectedIndex(0);
+      setScrollOffset(0);
+    }
+  }, [searchQuery]);
 
   // Scan node_modules sizes incrementally
   useEffect(() => {
@@ -171,6 +190,7 @@ const App = () => {
   // Handle keyboard input
   useInput((input, key) => {
     if (view === 'config') return; // Let ConfigurationComponent handle input
+    if (searchMode) return; // Let SearchInput handle input
 
     // Navigation
     if (key.upArrow || input === 'k') {
@@ -185,7 +205,7 @@ const App = () => {
     }
     if (key.downArrow || input === 'j') {
       setSelectedIndex(prev => {
-        const newIndex = Math.min(projects.length - 1, prev + 1);
+        const newIndex = Math.min(filteredProjects.length - 1, prev + 1);
         // Scroll down if selection moves below visible window
         if (newIndex >= scrollOffset + VISIBLE_ITEMS) {
           setScrollOffset(newIndex - VISIBLE_ITEMS + 1);
@@ -196,20 +216,20 @@ const App = () => {
 
     // Actions
     if (key.return) {
-      if (projects[selectedIndex]) {
-        openProject(projects[selectedIndex]);
+      if (filteredProjects[selectedIndex]) {
+        openProject(filteredProjects[selectedIndex]);
       }
     }
 
     if (input === 's') {
-      if (projects[selectedIndex]) {
-        const processInfo = runningProcesses[projects[selectedIndex].path];
+      if (filteredProjects[selectedIndex]) {
+        const processInfo = runningProcesses[filteredProjects[selectedIndex].path];
 
         // If server is running, stop it. Otherwise, start it.
         if (processInfo && processInfo.hasDevServer) {
-          stopServer(projects[selectedIndex]);
+          stopServer(filteredProjects[selectedIndex]);
         } else {
-          runDevServer(projects[selectedIndex]);
+          runDevServer(filteredProjects[selectedIndex]);
         }
       }
     }
@@ -222,12 +242,18 @@ const App = () => {
       setView('config');
     }
 
+    if (input === 'i') {
+      setSearchMode(true);
+    }
+
     if (input === 'r') {
       // Refresh projects list
       setScanning(true);
       setSelectedIndex(0);
       setScrollOffset(0);
       setNodeModulesSizes({}); // Clear sizes for rescan
+      setSearchQuery(''); // Clear search
+      setSearchMode(false);
       findPackageJsonFiles(configuration.projectPath)
         .then((foundProjects) => {
           // Sort projects alphabetically by project name
@@ -243,6 +269,15 @@ const App = () => {
       exit();
     }
   });
+
+  const handleSearchSubmit = (query) => {
+    setSearchQuery(query);
+    setSearchMode(false);
+  };
+
+  const handleSearchCancel = () => {
+    setSearchMode(false);
+  };
 
   const openProject = async (project) => {
     try {
@@ -311,6 +346,8 @@ const App = () => {
     // Trigger re-scan
     setScanning(true);
     setNodeModulesSizes({}); // Clear sizes for rescan
+    setSearchQuery(''); // Clear search
+    setSearchMode(false);
     findPackageJsonFiles(newConfig.projectPath)
       .then((foundProjects) => {
         // Sort projects alphabetically by project name
@@ -384,7 +421,7 @@ const App = () => {
     );
   }
 
-  const selectedProject = projects[selectedIndex];
+  const selectedProject = filteredProjects[selectedIndex];
 
   // Main UI
   return (
@@ -398,7 +435,8 @@ const App = () => {
 
           <Box flexDirection='row' justifyContent='space-between' marginBottom={1}>
             <Text bold underline>
-              Projects: {selectedIndex + 1}/{projects.length}
+              Projects: {selectedIndex + 1}/{filteredProjects.length}
+              {searchQuery && <Text color="yellow"> (filtered)</Text>}
             </Text>
             <Box gap={1}>
               <Text bold>Varu</Text>
@@ -406,14 +444,34 @@ const App = () => {
             </Box>
           </Box>
 
+          {searchMode && (
+            <SearchInput
+              onSubmit={handleSearchSubmit}
+              onCancel={handleSearchCancel}
+              initialValue={searchQuery}
+            />
+          )}
+
+          {searchQuery && !searchMode && (
+            <Box marginBottom={1}>
+              <Text inverse dimColor>
+                {" "}Filter: "{searchQuery}" ({filteredProjects.length} result{filteredProjects.length !== 1 ? 's' : ''})
+
+                {' '}<Text dimColor>(press i to modify, r to clear)</Text>
+                {" "}</Text>
+            </Box>
+          )}
+
           {successMessage && (
             <Box marginBottom={1}>
               <Text color="green">{successMessage}</Text>
             </Box>
           )}
 
-          {projects.length === 0 ? (
-            <Text color="yellow">No projects found</Text>
+          {filteredProjects.length === 0 ? (
+            <Text color="yellow">
+              {searchQuery ? `No projects match "${searchQuery}"` : 'No projects found'}
+            </Text>
           ) : (
             <>
               {scrollOffset > 0 && (
@@ -422,7 +480,7 @@ const App = () => {
                 </Box>
               )}
 
-              {projects.slice(scrollOffset, scrollOffset + VISIBLE_ITEMS).map((project, index) => <Project
+              {filteredProjects.slice(scrollOffset, scrollOffset + VISIBLE_ITEMS).map((project, index) => <Project
                 index={index}
                 key={index}
                 project={project}
@@ -432,10 +490,10 @@ const App = () => {
                 scrollOffset={scrollOffset}
               />)}
 
-              {scrollOffset + VISIBLE_ITEMS < projects.length && (
+              {scrollOffset + VISIBLE_ITEMS < filteredProjects.length && (
                 <Box marginLeft={1}>
                   <Text color="gray">
-                    ↓ {projects.length - (scrollOffset + VISIBLE_ITEMS)} more below...
+                    ↓ {filteredProjects.length - (scrollOffset + VISIBLE_ITEMS)} more below...
                   </Text>
                 </Box>
               )}
@@ -449,7 +507,7 @@ const App = () => {
           flexDirection="column"
         >
           <Text color="gray">
-            ↑/↓ or j/k: Navigate | Enter: nvim | s: toggle server | d: Toggle details | r: Refresh | c: Configure | q: Quit
+            ↑/↓ or j/k: Navigate | Enter: nvim | s: toggle server | d: Toggle details | i: Filter | r: Refresh | c: Configure | q: Quit
           </Text>
         </Box>
       </Box>

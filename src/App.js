@@ -4,7 +4,7 @@ import useConfig from './hooks/useConfig.js';
 import ConfigurationComponent from './components/configuration/configuration-component.js';
 import { findPackageJsonFiles } from './commands/project-scanner.js';
 import { executeCommandInTerminal } from './commands/run-command.js';
-import { getTerminalsInPath } from './commands/process-monitor.js';
+import { getTerminalsInPath, killProcessesInPath } from './commands/process-monitor.js';
 import { useScreenSize } from "./hooks/useScreenSize.js";
 import { getNodeModulesSize } from './utils/folder-size.js';
 import Project from './components/project.js';
@@ -18,6 +18,7 @@ const App = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [view, setView] = useState('list'); // 'list', 'details', 'config'
   const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
   const { exit } = useApp();
   const size = useScreenSize();
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -30,6 +31,16 @@ const App = () => {
   const scrollIndicatorLines = 2; // space for scroll indicators
   const availableLines = Math.max(5, size.height - reservedLines - detailsLines - scrollIndicatorLines);
   const VISIBLE_ITEMS = Math.max(5, availableLines); // minimum 5 items
+
+  // Clear success message after 3 seconds
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => {
+        setSuccessMessage(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
 
   // Scan for projects when config is loaded
   useEffect(() => {
@@ -195,7 +206,14 @@ const App = () => {
 
     if (input === 's') {
       if (projects[selectedIndex]) {
-        runDevServer(projects[selectedIndex]);
+        const processInfo = runningProcesses[projects[selectedIndex].path];
+
+        // If server is running, stop it. Otherwise, start it.
+        if (processInfo && processInfo.hasDevServer) {
+          stopServer(projects[selectedIndex]);
+        } else {
+          runDevServer(projects[selectedIndex]);
+        }
       }
     }
 
@@ -257,6 +275,40 @@ const App = () => {
     }
   };
 
+  const stopServer = async (project) => {
+    try {
+      const processInfo = runningProcesses[project.path];
+
+      if (!processInfo || processInfo.count === 0) {
+        setError('No running processes found for this project');
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+
+      // Kill all processes in the project path
+      const killedCount = await killProcessesInPath(project.path);
+
+      if (killedCount > 0) {
+        setSuccessMessage(`✓ Stopped ${killedCount} process${killedCount > 1 ? 'es' : ''} for ${project.projectName}`);
+        // Clear error if any
+        setError(null);
+        // Immediately update the running processes state
+        setRunningProcesses(prev => {
+          const newState = { ...prev };
+          delete newState[project.path];
+          return newState;
+        });
+      } else {
+        setError('No processes were stopped');
+        setTimeout(() => setError(null), 3000);
+      }
+    } catch (err) {
+      setError(`Failed to stop server: ${err.message}`);
+      setTimeout(() => setError(null), 3000);
+      console.error('Error stopping server:', err);
+    }
+  };
+
   const handleConfigComplete = (newConfig) => {
     setView('list');
     // Trigger re-scan
@@ -275,105 +327,136 @@ const App = () => {
 
   // Show configuration screen if no config
   if (!loading && !isConfig) {
-    return <ConfigurationComponent onComplete={handleConfigComplete} />;
+    return (
+      <>
+        <Box>
+          <Text>{'\x1Bc'}</Text>
+        </Box>
+        <ConfigurationComponent onComplete={handleConfigComplete} />
+      </>
+    );
   }
 
   // Show reconfiguration screen
   if (view === 'config') {
-    return <ConfigurationComponent onComplete={handleConfigComplete} />;
+    return (
+      <>
+        <Box>
+          <Text>{'\x1Bc'}</Text>
+        </Box>
+        <ConfigurationComponent onComplete={handleConfigComplete} />
+      </>
+    );
   }
 
   // Loading state
   if (loading || scanning) {
     return (
-      <Box flexDirection="column" padding={1}>
-        <Text color="yellow">
-          {loading ? '⏳ Loading configuration...' : '🔍 Scanning for projects...'}
-        </Text>
-        {configuration?.projectPath && (
-          <Text color="gray">Directory: {configuration.projectPath}</Text>
-        )}
-      </Box>
+      <>
+        <Box>
+          <Text>{'\x1Bc'}</Text>
+        </Box>
+        <Box flexDirection="column" padding={1}>
+          <Text color="yellow">
+            {loading ? '⏳ Loading configuration...' : '🔍 Scanning for projects...'}
+          </Text>
+          {configuration?.projectPath && (
+            <Text color="gray">Directory: {configuration.projectPath}</Text>
+          )}
+        </Box>
+      </>
     );
   }
 
   // Error state
   if (error) {
     return (
-      <Box flexDirection="column" padding={1}>
-        <Text color="red">✗ {error}</Text>
-        <Box marginTop={1}>
-          <Text color="gray">
-            Press <Text bold>c</Text> to reconfigure or <Text bold>q</Text> to quit
-          </Text>
+      <>
+        <Box>
+          <Text>{'\x1Bc'}</Text>
         </Box>
-      </Box>
+        <Box flexDirection="column" padding={1}>
+          <Text color="red">✗ {error}</Text>
+          <Box marginTop={1}>
+            <Text color="gray">
+              Press <Text bold>c</Text> to reconfigure or <Text bold>q</Text> to quit
+            </Text>
+          </Box>
+        </Box>
+      </>
     );
   }
 
   const selectedProject = projects[selectedIndex];
 
+  // Main UI
   return (
-    <Box flexDirection="column" height={size.height} width={size.width} padding={1}>
+    <>
+      <Box>
+        <Text>{'\x1Bc'}</Text>
+      </Box>
+      <Box flexDirection="column" height={size.height} width={size.width} padding={1}>
 
-      <Box flexDirection="column" marginBottom={1}>
-        <Box gap={1} marginBottom={1}>
-          <Text bold>Varu</Text>
-          <Text dimColor>{VERSION}</Text>
-          {scanningModules && (
-            <Text color="yellow">📦 Scanning node_modules...</Text>
+        <Box flexDirection="column" marginBottom={1}>
+
+          <Box flexDirection='row' justifyContent='space-between' marginBottom={1}>
+            <Text bold underline>
+              Projects: {selectedIndex + 1}/{projects.length}
+            </Text>
+            <Box gap={1}>
+              <Text bold>Varu</Text>
+              <Text dimColor>{VERSION}</Text>
+            </Box>
+          </Box>
+
+          {successMessage && (
+            <Box marginBottom={1}>
+              <Text color="green">{successMessage}</Text>
+            </Box>
+          )}
+
+          {projects.length === 0 ? (
+            <Text color="yellow">No projects found</Text>
+          ) : (
+            <>
+              {scrollOffset > 0 && (
+                <Box marginLeft={1}>
+                  <Text color="gray">↑ {scrollOffset} more above...</Text>
+                </Box>
+              )}
+
+              {projects.slice(scrollOffset, scrollOffset + VISIBLE_ITEMS).map((project, index) => <Project
+                index={index}
+                key={index}
+                project={project}
+                selectedIndex={selectedIndex}
+                runningProcesses={runningProcesses}
+                nodeModulesSizes={nodeModulesSizes}
+                scrollOffset={scrollOffset}
+              />)}
+
+              {scrollOffset + VISIBLE_ITEMS < projects.length && (
+                <Box marginLeft={1}>
+                  <Text color="gray">
+                    ↓ {projects.length - (scrollOffset + VISIBLE_ITEMS)} more below...
+                  </Text>
+                </Box>
+              )}
+            </>
           )}
         </Box>
 
-        <Box marginBottom={1}><Text bold underline>
-          Projects: {selectedIndex + 1}/{projects.length}
-        </Text></Box>
+        {view === 'details' && selectedProject && <ProjectDetails selectedProject={selectedProject} nodeModulesSizes={nodeModulesSizes} />}
 
-        {projects.length === 0 ? (
-          <Text color="yellow">No projects found</Text>
-        ) : (
-          <>
-            {scrollOffset > 0 && (
-              <Box marginLeft={1}>
-                <Text color="gray">↑ {scrollOffset} more above...</Text>
-              </Box>
-            )}
-
-            {projects.slice(scrollOffset, scrollOffset + VISIBLE_ITEMS).map((project, index) => <Project
-              index={index}
-              key={index}
-              project={project}
-              selectedIndex={selectedIndex}
-              runningProcesses={runningProcesses}
-              nodeModulesSizes={nodeModulesSizes}
-              scrollOffset={scrollOffset}
-            />)}
-
-            {scrollOffset + VISIBLE_ITEMS < projects.length && (
-              <Box marginLeft={1}>
-                <Text color="gray">
-                  ↓ {projects.length - (scrollOffset + VISIBLE_ITEMS)} more below...
-                </Text>
-              </Box>
-            )}
-          </>
-        )}
+        <Box
+          flexDirection="column"
+        >
+          <Text color="gray">
+            ↑/↓ or j/k: Navigate | Enter: nvim | s: toggle server | d: Toggle details | r: Refresh | c: Configure | q: Quit
+          </Text>
+        </Box>
       </Box>
-
-      {view === 'details' && selectedProject && <ProjectDetails selectedProject={selectedProject} nodeModulesSizes={nodeModulesSizes} />}
-
-      <Box
-        flexDirection="column"
-      >
-        <Text color="gray">
-          ↑/↓ or j/k: Navigate | Enter: Open in nvim | s: Run dev server | d: Toggle details
-        </Text>
-        <Text color="gray">
-          r: Refresh | c: Configure | q: Quit
-        </Text>
-
-      </Box>
-    </Box>
+    </>
   );
 };
 

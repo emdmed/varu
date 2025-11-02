@@ -1,14 +1,14 @@
-import { exec } from "child_process";
-import { promisify } from "util";
-import os from "os";
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import os from 'os';
 
 const execAsync = promisify(exec);
 
 /**
- * Get information about active terminal processes and their commands
- * @returns {Promise<Array>} - Array of terminal process info
+ * Get all terminals and their commands (cross-platform)
+ * @returns {Promise<Array>} Array of process objects with pid, command, cwd, and path
  */
-export async function getTerminalsAndCommands() {
+async function getTerminalsAndCommands() {
   try {
     if (os.platform() === "win32") {
       const { stdout } = await execAsync(
@@ -16,7 +16,6 @@ export async function getTerminalsAndCommands() {
       );
       const processes = JSON.parse(stdout);
       const processList = Array.isArray(processes) ? processes : [processes];
-
       return processList
         .filter(proc => proc.ExecutablePath)
         .map(proc => ({
@@ -26,31 +25,20 @@ export async function getTerminalsAndCommands() {
           cwd: "Unknown (Windows does not expose cwd easily)",
         }));
     } else {
-      // Linux/Unix - find processes associated with terminal sessions
-      const { stdout: ptsProcesses } = await execAsync(`ps aux | grep pts/ | grep -v grep`);
-
-      if (!ptsProcesses.trim()) {
-        console.log("No active terminals found.");
+      const { stdout } = await execAsync(`ps aux | grep pts/ | grep -v grep`);
+      if (!stdout.trim()) {
         return [];
       }
-
       const terminalInfo = await Promise.all(
-        ptsProcesses.split("\n").map(async (line) => {
+        stdout.split("\n").map(async (line) => {
           const parts = line.trim().split(/\s+/);
           if (parts.length > 10) {
             const pid = parts[1];
             const tty = parts[6];
             const command = parts.slice(10).join(" ");
-
             try {
               const { stdout: cwd } = await execAsync(`readlink /proc/${pid}/cwd`);
-              return {
-                pid,
-                tty,
-                command,
-                cwd: cwd.trim(),
-                path: cwd.trim()
-              };
+              return { pid, tty, command, cwd: cwd.trim(), path: cwd.trim() };
             } catch (error) {
               return {
                 pid,
@@ -64,7 +52,6 @@ export async function getTerminalsAndCommands() {
           return null;
         })
       );
-
       return terminalInfo.filter(Boolean);
     }
   } catch (error) {
@@ -74,112 +61,79 @@ export async function getTerminalsAndCommands() {
 }
 
 /**
- * Get active terminals filtered by valid paths
- * @returns {Promise<Array>} - Array of active terminal info with valid paths
- */
-export async function getActiveTerminals() {
-  try {
-    const activeTerminals = await getTerminalsAndCommands();
-    return activeTerminals.filter(terminal => terminal.path !== "Unknown");
-  } catch (error) {
-    console.error("Unexpected error:", error.message);
-    return [];
-  }
-}
-
-/**
- * Find terminals running in a specific directory
- * @param {string} projectPath - Path to search for
- * @returns {Promise<Array>} - Array of terminals running in that path
+ * Get all terminal processes running in a specific path
+ * @param {string} projectPath - The project directory path
+ * @returns {Promise<Array>} Array of process objects with pid, command, and cwd
  */
 export async function getTerminalsInPath(projectPath) {
   try {
-    const activeTerminals = await getActiveTerminals();
-    return activeTerminals.filter(terminal =>
-      terminal.cwd === projectPath || terminal.path === projectPath
-    );
+    const allTerminals = await getTerminalsAndCommands();
+
+    // Filter terminals that are running in the project path
+    return allTerminals.filter(terminal => {
+      if (!terminal.cwd || terminal.cwd === "Unknown" || terminal.cwd.includes("Permission Denied")) {
+        return false;
+      }
+      return terminal.cwd === projectPath || terminal.cwd.startsWith(projectPath + '/');
+    });
   } catch (error) {
-    console.error("Error filtering terminals by path:", error.message);
+    console.error("Error getting terminals in path:", error.message);
     return [];
   }
 }
 
 /**
- * Find terminals running specific commands (e.g., npm, node, nvim)
- * @param {string} commandPattern - Command pattern to search for (e.g., "npm run dev", "nvim")
- * @returns {Promise<Array>} - Array of terminals running matching commands
+ * Kill all processes running in a specific path
+ * @param {string} projectPath - The project directory path
+ * @returns {Promise<number>} Number of processes killed
  */
-export async function getTerminalsByCommand(commandPattern) {
+export async function killProcessesInPath(projectPath) {
   try {
-    const activeTerminals = await getActiveTerminals();
-    return activeTerminals.filter(terminal =>
-      terminal.command.includes(commandPattern)
-    );
+    // Get all terminals running in this path
+    const terminalsToKill = await getTerminalsInPath(projectPath);
+
+    if (terminalsToKill.length === 0) {
+      return 0;
+    }
+
+    let killedCount = 0;
+
+    // Kill each terminal process
+    for (const terminal of terminalsToKill) {
+      try {
+        const killCommand = os.platform() === "win32"
+          ? `taskkill /PID ${terminal.pid} /F`
+          : `kill -9 ${terminal.pid} || true`;
+
+        await execAsync(killCommand);
+        killedCount++;
+      } catch (err) {
+        // Process might have already ended or we don't have permission
+        console.error(`Failed to kill process ${terminal.pid}:`, err.message);
+      }
+    }
+
+    return killedCount;
   } catch (error) {
-    console.error("Error filtering terminals by command:", error.message);
-    return [];
+    throw new Error(`Failed to kill processes: ${error.message}`);
   }
 }
 
 /**
- * Get a summary of all running dev servers and editors
- * @returns {Promise<Object>} - Object containing categorized processes
+ * Kill a specific process by PID (cross-platform)
+ * @param {number} pid - Process ID to kill
+ * @returns {Promise<boolean>} True if process was killed successfully
  */
-export async function getProcessSummary() {
+export async function killProcess(pid) {
   try {
-    const activeTerminals = await getActiveTerminals();
+    const killCommand = os.platform() === "win32"
+      ? `taskkill /PID ${pid} /F`
+      : `kill -9 ${pid} || true`;
 
-    const summary = {
-      total: activeTerminals.length,
-      devServers: activeTerminals.filter(t =>
-        t.command.includes("npm run dev") ||
-        t.command.includes("npm start") ||
-        t.command.includes("yarn dev") ||
-        t.command.includes("pnpm dev")
-      ),
-      editors: activeTerminals.filter(t =>
-        t.command.includes("nvim") ||
-        t.command.includes("vim") ||
-        t.command.includes("code")
-      ),
-      other: activeTerminals.filter(t =>
-        !t.command.includes("npm") &&
-        !t.command.includes("nvim") &&
-        !t.command.includes("vim") &&
-        !t.command.includes("code") &&
-        !t.command.includes("yarn") &&
-        !t.command.includes("pnpm")
-      )
-    };
-
-    return summary;
+    await execAsync(killCommand);
+    return true;
   } catch (error) {
-    console.error("Error getting process summary:", error.message);
-    return {
-      total: 0,
-      devServers: [],
-      editors: [],
-      other: []
-    };
-  }
-}
-
-/**
- * Check if a dev server is already running for a project
- * @param {string} projectPath - Path to the project
- * @returns {Promise<boolean>} - True if dev server is running
- */
-export async function isDevServerRunning(projectPath) {
-  try {
-    const terminalsInPath = await getTerminalsInPath(projectPath);
-    return terminalsInPath.some(terminal =>
-      terminal.command.includes("npm run dev") ||
-      terminal.command.includes("npm start") ||
-      terminal.command.includes("yarn dev") ||
-      terminal.command.includes("pnpm dev")
-    );
-  } catch (error) {
-    console.error("Error checking dev server status:", error.message);
+    console.error(`Failed to kill process ${pid}:`, error.message);
     return false;
   }
 }

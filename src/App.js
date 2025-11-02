@@ -247,7 +247,6 @@ const App = () => {
   return (
     <Box flexDirection="column" height={size.height} width={size.width} padding={1}>
 
-      {/* Project List */}
       <Box flexDirection="column" marginBottom={1}>
         <Box gap={1} marginBottom={1}>
           <Text bold>Varu</Text>
@@ -308,7 +307,6 @@ const App = () => {
         )}
       </Box>
 
-      {/* Project Details */}
       {view === 'details' && selectedProject && (
         <Box
           flexDirection="column"
@@ -355,7 +353,6 @@ const App = () => {
         </Box>
       )}
 
-      {/* Help / Controls */}
       <Box
         flexDirection="column"
       >

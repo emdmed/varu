@@ -1,9 +1,9 @@
-const { spawn } = require("child_process");
-const { access } = require("fs/promises");
-const { exec } = require("child_process");
-const { promisify } = require("util");
-const net = require("net");
-const os = require("os");
+import { spawn } from "child_process";
+import { access } from "fs/promises";
+import { exec } from "child_process";
+import { promisify } from "util";
+import net from "net";
+import os from "os";
 
 const execAsync = promisify(exec);
 
@@ -12,18 +12,15 @@ const execAsync = promisify(exec);
  * @param {number} port - Port number to check
  * @returns {Promise<boolean>} - True if port is available
  */
-const isPortAvailable = async (port) => {
+export const isPortAvailable = async (port) => {
   return new Promise((resolve) => {
     const server = net.createServer();
-
     server.once("error", (err) => {
       resolve(false);
     });
-
     server.once("listening", () => {
       server.close(() => resolve(true));
     });
-
     server.listen(port);
   });
 };
@@ -32,14 +29,21 @@ const isPortAvailable = async (port) => {
  * Find an available terminal emulator on Linux
  * @returns {Promise<string>} - Terminal command
  */
-const findAvailableTerminal = async () => {
+export const findAvailableTerminal = async () => {
+  // Order prioritizes popular Arch Linux terminals first, then Ubuntu/GNOME defaults
   const possibleTerminals = [
-    "gnome-terminal",
-    "konsole",
-    "xfce4-terminal",
-    "xterm",
+    "alacritty",      // Very popular on Arch
+    "kitty",          // Popular on Arch
+    "wezterm",        // Modern terminal
+    "gnome-terminal", // Ubuntu/GNOME default
+    "konsole",        // KDE default
+    "xfce4-terminal", // XFCE default
+    "terminator",     // Popular alternative
+    "tilix",          // GNOME-based
+    "urxvt",          // Lightweight, often on Arch
+    "st",             // Suckless terminal
+    "xterm",          // Universal fallback
   ];
-
   for (const term of possibleTerminals) {
     try {
       await execAsync(`which ${term}`);
@@ -48,8 +52,7 @@ const findAvailableTerminal = async () => {
       // Terminal not found, continue to next
     }
   }
-
-  return "x-terminal-emulator"; // Fallback
+  throw new Error("No terminal emulator found. Please install one of: alacritty, kitty, gnome-terminal, konsole, or xterm");
 };
 
 /**
@@ -60,18 +63,16 @@ const findAvailableTerminal = async () => {
  * @param {number} [options.port] - Optional port to check availability
  * @returns {Promise<Object>} - Result object with process info
  */
-const executeCommandInTerminal = async ({ command = "npm run dev", path, port }) => {
+export const executeCommandInTerminal = async ({ command = "npm run dev", path, port }) => {
   // Validate path
   if (!path) {
     throw new Error("Path is required");
   }
-
   try {
     await access(path);
   } catch (err) {
     throw new Error("Invalid or inaccessible path");
   }
-
   // Check port availability if specified
   if (port) {
     const available = await isPortAvailable(port);
@@ -81,25 +82,52 @@ const executeCommandInTerminal = async ({ command = "npm run dev", path, port })
       throw error;
     }
   }
-
   // Build platform-specific command
   let execCommand;
-
   if (os.platform() === "win32") {
     execCommand = `powershell -Command "Start-Process -NoNewWindow -FilePath 'cmd.exe' -ArgumentList '/k cd /d ${path} && ${command}'"`;
   } else {
     const terminal = await findAvailableTerminal();
-    execCommand = `${terminal} -- zsh -i -c "source ~/.zshrc; cd ${path} && ${command}; exec zsh"`;
+
+    // Different terminals have different command syntax
+    // Using bash instead of zsh for better compatibility
+    switch (terminal) {
+      case "alacritty":
+        execCommand = `${terminal} --working-directory "${path}" -e bash -c "${command}; exec bash"`;
+        break;
+      case "kitty":
+        execCommand = `${terminal} --directory "${path}" bash -c "${command}; exec bash"`;
+        break;
+      case "wezterm":
+        execCommand = `${terminal} start --cwd "${path}" -- bash -c "${command}; exec bash"`;
+        break;
+      case "gnome-terminal":
+      case "xfce4-terminal":
+      case "tilix":
+        execCommand = `${terminal} --working-directory="${path}" -- bash -c "${command}; exec bash"`;
+        break;
+      case "konsole":
+        execCommand = `${terminal} --workdir "${path}" -e bash -c "${command}; exec bash"`;
+        break;
+      case "terminator":
+        execCommand = `${terminal} --working-directory="${path}" -e "bash -c '${command}; exec bash'"`;
+        break;
+      default:
+        // Generic fallback for xterm and others
+        execCommand = `${terminal} -e bash -c "cd ${path} && ${command}; exec bash"`;
+    }
   }
-
   console.log("Executing:", execCommand);
-
-  // Spawn the process
+  // Spawn the process in detached mode so it continues running after parent exits
   const childProcess = spawn(execCommand, {
     shell: true,
-    stdio: "inherit",
+    detached: true,  // Run process in separate process group
+    stdio: "ignore", // Don't pipe stdio, let terminal handle it
     env: { ...process.env, DISPLAY: ":0" },
   });
+
+  // Unref the child so parent can exit independently
+  childProcess.unref();
 
   return {
     message: "Command executed successfully",
@@ -108,10 +136,4 @@ const executeCommandInTerminal = async ({ command = "npm run dev", path, port })
     processId: childProcess.pid,
     childProcess, // Return the process for further control if needed
   };
-};
-
-module.exports = {
-  executeCommandInTerminal,
-  isPortAvailable,
-  findAvailableTerminal,
 };

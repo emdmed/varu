@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
-import useConfig from '../hooks/useConfig.js';
-import ConfigurationComponent from '../components/configuration/configuration-component.js';
-import { findPackageJsonFiles } from '../commands/project-scanner.js';
-import { exec } from 'child_process';
-import { useScreenSize } from "../hooks/useScreenSize.js"
+import useConfig from './hooks/useConfig.js';
+import ConfigurationComponent from './components/configuration/configuration-component.js';
+import { findPackageJsonFiles } from './commands/project-scanner.js';
+import { executeCommandInTerminal } from './commands/run-command.js';
+import { useScreenSize } from "./hooks/useScreenSize.js"
 
 const App = () => {
   const { configuration, isConfig, loading } = useConfig();
@@ -79,6 +79,12 @@ const App = () => {
       }
     }
 
+    if (input === 's') {
+      if (projects[selectedIndex]) {
+        runDevServer(projects[selectedIndex]);
+      }
+    }
+
     if (input === 'd') {
       setView(view === 'details' ? 'list' : 'details');
     }
@@ -108,16 +114,31 @@ const App = () => {
     }
   });
 
-  const openProject = (project) => {
+  const openProject = async (project) => {
     try {
-      // Open in VS Code (or your preferred editor)
-      exec(`code "${project.path}"`, (error) => {
-        if (error) {
-          console.error('Error opening project:', error);
-        }
+      // Open in nvim using the executeCommandInTerminal function
+      await executeCommandInTerminal({
+        command: 'nvim .',
+        path: project.path
       });
     } catch (err) {
-      console.error('Failed to open project:', err);
+      setError(`Failed to open project: ${err.message}`);
+      console.error('Error opening project:', err);
+    }
+  };
+
+  const runDevServer = async (project) => {
+    try {
+      // Determine the command to run based on project.command or default to npm run dev
+      const devCommand = project.command !== 'N/A' ? project.command : 'npm run dev';
+
+      await executeCommandInTerminal({
+        command: devCommand,
+        path: project.path
+      });
+    } catch (err) {
+      setError(`Failed to run dev server: ${err.message}`);
+      console.error('Error running dev server:', err);
     }
   };
 
@@ -201,19 +222,18 @@ const App = () => {
               const actualIndex = scrollOffset + index;
               const isSelected = actualIndex === selectedIndex
               return (
-                <Box key={actualIndex} marginLeft={1}>
-                  <Text>
-                    <Text inverse={isSelected} bold={actualIndex === selectedIndex}>
+                <Box justifyContent="space-between" borderStyle={isSelected ? "round" : ""} key={actualIndex} >
+                  <Box gap={1}>
+                    <Text inverse={isSelected} bold >
                       {project.projectName}
                     </Text>
-                    {' '}
                     <Text color="gray">
                       ({project.framework})
                     </Text>
-                    {project.gitBranch && (
-                      <Text color="yellow"> [{project.gitBranch}]</Text>
-                    )}
-                  </Text>
+                  </Box>
+                  {project.gitBranch && (
+                    <Text color="yellow"> [{project.gitBranch}]</Text>
+                  )}
                 </Box>
               );
             })}
@@ -281,7 +301,10 @@ const App = () => {
         flexDirection="column"
       >
         <Text color="gray">
-          ↑/↓ or j/k: Navigate | Enter: Open in VS Code | d: Toggle details r: Refresh | c: Configure | q: Quit
+          ↑/↓ or j/k: Navigate | Enter: Open in nvim | s: Run dev server | d: Toggle details
+        </Text>
+        <Text color="gray">
+          r: Refresh | c: Configure | q: Quit
         </Text>
 
       </Box>

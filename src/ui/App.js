@@ -1,0 +1,315 @@
+import React, { useState, useEffect } from 'react';
+import { Box, Text, useInput, useApp } from 'ink';
+import useConfig from '../hooks/useConfig.js';
+import ConfigurationComponent from '../components/configuration/configuration-component.js';
+import { findPackageJsonFiles } from '../commands/project-scanner.js';
+import { exec } from 'child_process';
+import { useScreenSize } from "../hooks/useScreenSize.js"
+
+const App = () => {
+  const { configuration, isConfig, loading } = useConfig();
+  const [projects, setProjects] = useState([]);
+  const [scanning, setScanning] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [view, setView] = useState('list'); // 'list', 'details', 'config'
+  const [error, setError] = useState(null);
+  const { exit } = useApp();
+  const size = useScreenSize();
+  const [scrollOffset, setScrollOffset] = useState(0);
+
+  // Calculate how many projects can fit based on screen height
+  // Reserve space for: header (3 lines), stats (2 lines), projects header (2 lines), 
+  // details box if shown (~8 lines), controls (4 lines), and margins
+  const reservedLines = 3 + 2 + 2 + 4 + 2; // base UI elements
+  const detailsLines = (view === 'details' && projects[selectedIndex]) ? 10 : 0;
+  const scrollIndicatorLines = 2; // space for scroll indicators
+  const availableLines = Math.max(5, size.height - reservedLines - detailsLines - scrollIndicatorLines);
+  const VISIBLE_ITEMS = Math.max(5, availableLines); // minimum 5 items
+
+  // Scan for projects when config is loaded
+  useEffect(() => {
+    if (isConfig && configuration?.projectPath) {
+      setScanning(true);
+      setError(null);
+      findPackageJsonFiles(configuration.projectPath)
+        .then((foundProjects) => {
+          // Sort projects alphabetically by project name
+          const sortedProjects = foundProjects.sort((a, b) =>
+            a.projectName.localeCompare(b.projectName, undefined, { sensitivity: 'base' })
+          );
+          setProjects(sortedProjects);
+          if (sortedProjects.length === 0) {
+            setError('No projects found in the configured directory');
+          }
+        })
+        .catch((err) => {
+          setError(`Error scanning projects: ${err.message}`);
+        })
+        .finally(() => setScanning(false));
+    }
+  }, [isConfig, configuration]);
+
+  // Handle keyboard input
+  useInput((input, key) => {
+    if (view === 'config') return; // Let ConfigurationComponent handle input
+
+    // Navigation
+    if (key.upArrow || input === 'k') {
+      setSelectedIndex(prev => {
+        const newIndex = Math.max(0, prev - 1);
+        // Scroll up if selection moves above visible window
+        if (newIndex < scrollOffset) {
+          setScrollOffset(newIndex);
+        }
+        return newIndex;
+      });
+    }
+    if (key.downArrow || input === 'j') {
+      setSelectedIndex(prev => {
+        const newIndex = Math.min(projects.length - 1, prev + 1);
+        // Scroll down if selection moves below visible window
+        if (newIndex >= scrollOffset + VISIBLE_ITEMS) {
+          setScrollOffset(newIndex - VISIBLE_ITEMS + 1);
+        }
+        return newIndex;
+      });
+    }
+
+    // Actions
+    if (key.return) {
+      if (projects[selectedIndex]) {
+        openProject(projects[selectedIndex]);
+      }
+    }
+
+    if (input === 'd') {
+      setView(view === 'details' ? 'list' : 'details');
+    }
+
+    if (input === 'c') {
+      setView('config');
+    }
+
+    if (input === 'r') {
+      // Refresh projects list
+      setScanning(true);
+      setSelectedIndex(0);
+      setScrollOffset(0);
+      findPackageJsonFiles(configuration.projectPath)
+        .then((foundProjects) => {
+          // Sort projects alphabetically by project name
+          const sortedProjects = foundProjects.sort((a, b) =>
+            a.projectName.localeCompare(b.projectName, undefined, { sensitivity: 'base' })
+          );
+          setProjects(sortedProjects);
+        })
+        .finally(() => setScanning(false));
+    }
+
+    if (input === 'q' || (key.ctrl && input === 'c')) {
+      exit();
+    }
+  });
+
+  const openProject = (project) => {
+    try {
+      // Open in VS Code (or your preferred editor)
+      exec(`code "${project.path}"`, (error) => {
+        if (error) {
+          console.error('Error opening project:', error);
+        }
+      });
+    } catch (err) {
+      console.error('Failed to open project:', err);
+    }
+  };
+
+  const handleConfigComplete = (newConfig) => {
+    setView('list');
+    // Trigger re-scan
+    setScanning(true);
+    findPackageJsonFiles(newConfig.projectPath)
+      .then((foundProjects) => {
+        // Sort projects alphabetically by project name
+        const sortedProjects = foundProjects.sort((a, b) =>
+          a.projectName.localeCompare(b.projectName, undefined, { sensitivity: 'base' })
+        );
+        setProjects(sortedProjects);
+      })
+      .finally(() => setScanning(false));
+  };
+
+  // Show configuration screen if no config
+  if (!loading && !isConfig) {
+    return <ConfigurationComponent onComplete={handleConfigComplete} />;
+  }
+
+  // Show reconfiguration screen
+  if (view === 'config') {
+    return <ConfigurationComponent onComplete={handleConfigComplete} />;
+  }
+
+  // Loading state
+  if (loading || scanning) {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Text color="yellow">
+          {loading ? '⏳ Loading configuration...' : '🔍 Scanning for projects...'}
+        </Text>
+        {configuration?.projectPath && (
+          <Text color="gray">Directory: {configuration.projectPath}</Text>
+        )}
+      </Box>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Text color="red">✗ {error}</Text>
+        <Box marginTop={1}>
+          <Text color="gray">
+            Press <Text bold>c</Text> to reconfigure or <Text bold>q</Text> to quit
+          </Text>
+        </Box>
+      </Box>
+    );
+  }
+
+  const selectedProject = projects[selectedIndex];
+
+  return (
+    <Box flexDirection="column" height={size.height} width={size.width} padding={1}>
+      {/* Header */}
+      <Box marginBottom={1} borderStyle="round" borderColor="cyan" paddingX={1}>
+        <Text bold color="cyan">
+          🚀 LazyLauncher - Dev Dashboard
+        </Text>
+      </Box>
+
+      {/* Stats */}
+      <Box marginBottom={1}>
+        <Text>
+          Found <Text bold color="green">{projects.length}</Text> projects in{' '}
+          <Text color="gray">{configuration.projectPath}</Text>
+        </Text>
+      </Box>
+
+      {/* Project List */}
+      <Box flexDirection="column" marginBottom={1}>
+        <Box marginBottom={1}>
+          <Text bold underline>
+            Projects: {selectedIndex + 1}/{projects.length}
+          </Text>
+        </Box>
+
+        {projects.length === 0 ? (
+          <Text color="yellow">No projects found</Text>
+        ) : (
+          <>
+            {scrollOffset > 0 && (
+              <Box marginLeft={1}>
+                <Text color="gray">↑ {scrollOffset} more above...</Text>
+              </Box>
+            )}
+
+            {projects.slice(scrollOffset, scrollOffset + VISIBLE_ITEMS).map((project, index) => {
+              const actualIndex = scrollOffset + index;
+              return (
+                <Box key={actualIndex} marginLeft={1}>
+                  <Text color={actualIndex === selectedIndex ? 'cyan' : 'white'}>
+                    {actualIndex === selectedIndex ? '▶ ' : '  '}
+                    <Text bold={actualIndex === selectedIndex}>
+                      {project.projectName}
+                    </Text>
+                    {' '}
+                    <Text color="gray">
+                      ({project.framework})
+                    </Text>
+                    {project.gitBranch && (
+                      <Text color="yellow"> [{project.gitBranch}]</Text>
+                    )}
+                  </Text>
+                </Box>
+              );
+            })}
+
+            {scrollOffset + VISIBLE_ITEMS < projects.length && (
+              <Box marginLeft={1}>
+                <Text color="gray">
+                  ↓ {projects.length - (scrollOffset + VISIBLE_ITEMS)} more below...
+                </Text>
+              </Box>
+            )}
+          </>
+        )}
+      </Box>
+
+      {/* Project Details */}
+      {view === 'details' && selectedProject && (
+        <Box
+          flexDirection="column"
+          marginBottom={1}
+          borderStyle="round"
+          borderColor="yellow"
+          paddingX={1}
+          paddingY={0}
+        >
+          <Text bold color="yellow">Project Details:</Text>
+          <Text>
+            <Text bold>Name: </Text>
+            {selectedProject.projectName}
+          </Text>
+          <Text>
+            <Text bold>Framework: </Text>
+            {selectedProject.framework}
+          </Text>
+          <Text>
+            <Text bold>Path: </Text>
+            <Text color="gray">{selectedProject.path}</Text>
+          </Text>
+          {selectedProject.command !== 'N/A' && (
+            <Text>
+              <Text bold>Command: </Text>
+              <Text color="green">{selectedProject.command}</Text>
+            </Text>
+          )}
+          {selectedProject.gitBranch && (
+            <Text>
+              <Text bold>Git Branch: </Text>
+              <Text color="yellow">{selectedProject.gitBranch}</Text>
+            </Text>
+          )}
+          {selectedProject.availableBranches?.length > 0 && (
+            <Text>
+              <Text bold>Other Branches: </Text>
+              <Text color="gray">
+                {selectedProject.availableBranches.slice(0, 3).join(', ')}
+                {selectedProject.availableBranches.length > 3 && '...'}
+              </Text>
+            </Text>
+          )}
+        </Box>
+      )}
+
+      {/* Help / Controls */}
+      <Box
+        borderStyle="single"
+        borderColor="gray"
+        paddingX={1}
+        flexDirection="column"
+      >
+        <Text bold color="gray">Controls:</Text>
+        <Text color="gray">
+          ↑/↓ or j/k: Navigate | Enter: Open in VS Code | d: Toggle details
+        </Text>
+        <Text color="gray">
+          r: Refresh | c: Configure | q: Quit
+        </Text>
+      </Box>
+    </Box>
+  );
+};
+
+export default App;

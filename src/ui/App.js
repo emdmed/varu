@@ -17,9 +17,6 @@ const App = () => {
   const size = useScreenSize();
   const [scrollOffset, setScrollOffset] = useState(0);
 
-  // Calculate how many projects can fit based on screen height
-  // Reserve space for: header (3 lines), stats (2 lines), projects header (2 lines), 
-  // details box if shown (~8 lines), controls (4 lines), and margins
   const reservedLines = 3 + 2 + 2 + 4 + 2; // base UI elements
   const detailsLines = (view === 'details' && projects[selectedIndex]) ? 10 : 0;
   const scrollIndicatorLines = 2; // space for scroll indicators
@@ -181,20 +178,6 @@ const App = () => {
 
   return (
     <Box flexDirection="column" height={size.height} width={size.width} padding={1}>
-      {/* Header */}
-      <Box marginBottom={1} borderStyle="round" borderColor="cyan" paddingX={1}>
-        <Text bold color="cyan">
-          🚀 LazyLauncher - Dev Dashboard
-        </Text>
-      </Box>
-
-      {/* Stats */}
-      <Box marginBottom={1}>
-        <Text>
-          Found <Text bold color="green">{projects.length}</Text> projects in{' '}
-          <Text color="gray">{configuration.projectPath}</Text>
-        </Text>
-      </Box>
 
       {/* Project List */}
       <Box flexDirection="column" marginBottom={1}>
@@ -216,11 +199,11 @@ const App = () => {
 
             {projects.slice(scrollOffset, scrollOffset + VISIBLE_ITEMS).map((project, index) => {
               const actualIndex = scrollOffset + index;
+              const isSelected = actualIndex === selectedIndex
               return (
                 <Box key={actualIndex} marginLeft={1}>
-                  <Text color={actualIndex === selectedIndex ? 'cyan' : 'white'}>
-                    {actualIndex === selectedIndex ? '▶ ' : '  '}
-                    <Text bold={actualIndex === selectedIndex}>
+                  <Text>
+                    <Text inverse={isSelected} bold={actualIndex === selectedIndex}>
                       {project.projectName}
                     </Text>
                     {' '}
@@ -295,18 +278,12 @@ const App = () => {
 
       {/* Help / Controls */}
       <Box
-        borderStyle="single"
-        borderColor="gray"
-        paddingX={1}
         flexDirection="column"
       >
-        <Text bold color="gray">Controls:</Text>
         <Text color="gray">
-          ↑/↓ or j/k: Navigate | Enter: Open in VS Code | d: Toggle details
+          ↑/↓ or j/k: Navigate | Enter: Open in VS Code | d: Toggle details r: Refresh | c: Configure | q: Quit
         </Text>
-        <Text color="gray">
-          r: Refresh | c: Configure | q: Quit
-        </Text>
+
       </Box>
     </Box>
   );

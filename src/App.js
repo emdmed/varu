@@ -7,6 +7,7 @@ import { executeCommandInTerminal } from './commands/run-command.js';
 import { getTerminalsInPath } from './commands/process-monitor.js';
 import { useScreenSize } from "./hooks/useScreenSize.js"
 
+const VERSION = "0.0.5"
 const App = () => {
   const { configuration, isConfig, loading } = useConfig();
   const [projects, setProjects] = useState([]);
@@ -264,7 +265,7 @@ const App = () => {
       <Box flexDirection="column" marginBottom={1}>
         <Box gap={1} marginBottom={1}>
           <Text bold>Varu</Text>
-          <Text dimColor>0.0.4</Text>
+          <Text dimColor>{VERSION}</Text>
 
         </Box>
 

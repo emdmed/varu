@@ -24,7 +24,6 @@ const App = () => {
   const [scrollOffset, setScrollOffset] = useState(0);
   const [runningProcesses, setRunningProcesses] = useState({});
   const [nodeModulesSizes, setNodeModulesSizes] = useState({});
-  const [scanningModules, setScanningModules] = useState(false);
 
   const reservedLines = 3 + 2 + 2 + 4 + 2; // base UI elements
   const detailsLines = (view === 'details' && projects[selectedIndex]) ? 10 : 0;
@@ -71,7 +70,6 @@ const App = () => {
 
     let currentIndex = 0;
     let isActive = true;
-    setScanningModules(true);
 
     const scanNextProject = async () => {
       if (!isActive || projects.length === 0) return;
@@ -95,7 +93,6 @@ const App = () => {
 
       // If we've scanned all projects, stop
       if (currentIndex >= projects.length) {
-        setScanningModules(false);
         return;
       }
     };

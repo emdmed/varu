@@ -48,49 +48,63 @@ const App = () => {
     }
   }, [isConfig, configuration]);
 
-  // Monitor running processes every 3 seconds
+  // Monitor running processes incrementally
   useEffect(() => {
-    const checkRunningProcesses = async () => {
-      if (projects.length === 0) return;
+    if (projects.length === 0) return;
 
-      const processMap = {};
+    let currentIndex = 0;
+    let isActive = true;
 
-      // Check each project for running processes
-      await Promise.all(
-        projects.map(async (project) => {
-          try {
-            const terminals = await getTerminalsInPath(project.path);
-            if (terminals.length > 0) {
-              processMap[project.path] = {
-                hasDevServer: terminals.some(t =>
-                  t.command.includes('npm run dev') ||
-                  t.command.includes('npm start') ||
-                  t.command.includes('yarn dev') ||
-                  t.command.includes('pnpm dev')
-                ),
-                hasEditor: terminals.some(t =>
-                  t.command.includes('nvim') ||
-                  t.command.includes('vim')
-                ),
-                count: terminals.length
-              };
+    const checkNextProject = async () => {
+      if (!isActive || projects.length === 0) return;
+
+      const project = projects[currentIndex];
+      try {
+        const terminals = await getTerminalsInPath(project.path);
+
+        if (terminals.length > 0 && isActive) {
+          setRunningProcesses(prev => ({
+            ...prev,
+            [project.path]: {
+              hasDevServer: terminals.some(t =>
+                t.command.includes('npm run dev') ||
+                t.command.includes('npm start') ||
+                t.command.includes('yarn dev') ||
+                t.command.includes('pnpm dev')
+              ),
+              hasEditor: terminals.some(t =>
+                t.command.includes('nvim') ||
+                t.command.includes('vim')
+              ),
+              count: terminals.length
             }
-          } catch (err) {
-            // Silently fail for individual project checks
-          }
-        })
-      );
+          }));
+        } else if (isActive) {
+          // Remove from state if no terminals found
+          setRunningProcesses(prev => {
+            const newState = { ...prev };
+            delete newState[project.path];
+            return newState;
+          });
+        }
+      } catch (err) {
+        // Silently fail for individual project checks
+      }
 
-      setRunningProcesses(processMap);
+      // Move to next project
+      currentIndex = (currentIndex + 1) % projects.length;
     };
 
+    // Check one project every 500ms (all projects checked in projectCount * 0.5 seconds)
+    const interval = setInterval(checkNextProject, 500);
+
     // Initial check
-    checkRunningProcesses();
+    checkNextProject();
 
-    // Set up interval to check every 3 seconds
-    const interval = setInterval(checkRunningProcesses, 3000);
-
-    return () => clearInterval(interval);
+    return () => {
+      isActive = false;
+      clearInterval(interval);
+    };
   }, [projects]);
 
   // Handle keyboard input

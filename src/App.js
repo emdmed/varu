@@ -4,6 +4,7 @@ import useConfig from './hooks/useConfig.js';
 import ConfigurationComponent from './components/configuration/configuration-component.js';
 import { findPackageJsonFiles } from './commands/project-scanner.js';
 import { executeCommandInTerminal } from './commands/run-command.js';
+import { getTerminalsInPath } from './commands/process-monitor.js';
 import { useScreenSize } from "./hooks/useScreenSize.js"
 
 const App = () => {
@@ -16,6 +17,7 @@ const App = () => {
   const { exit } = useApp();
   const size = useScreenSize();
   const [scrollOffset, setScrollOffset] = useState(0);
+  const [runningProcesses, setRunningProcesses] = useState({});
 
   const reservedLines = 3 + 2 + 2 + 4 + 2; // base UI elements
   const detailsLines = (view === 'details' && projects[selectedIndex]) ? 10 : 0;
@@ -45,6 +47,51 @@ const App = () => {
         .finally(() => setScanning(false));
     }
   }, [isConfig, configuration]);
+
+  // Monitor running processes every 3 seconds
+  useEffect(() => {
+    const checkRunningProcesses = async () => {
+      if (projects.length === 0) return;
+
+      const processMap = {};
+
+      // Check each project for running processes
+      await Promise.all(
+        projects.map(async (project) => {
+          try {
+            const terminals = await getTerminalsInPath(project.path);
+            if (terminals.length > 0) {
+              processMap[project.path] = {
+                hasDevServer: terminals.some(t =>
+                  t.command.includes('npm run dev') ||
+                  t.command.includes('npm start') ||
+                  t.command.includes('yarn dev') ||
+                  t.command.includes('pnpm dev')
+                ),
+                hasEditor: terminals.some(t =>
+                  t.command.includes('nvim') ||
+                  t.command.includes('vim')
+                ),
+                count: terminals.length
+              };
+            }
+          } catch (err) {
+            // Silently fail for individual project checks
+          }
+        })
+      );
+
+      setRunningProcesses(processMap);
+    };
+
+    // Initial check
+    checkRunningProcesses();
+
+    // Set up interval to check every 3 seconds
+    const interval = setInterval(checkRunningProcesses, 3000);
+
+    return () => clearInterval(interval);
+  }, [projects]);
 
   // Handle keyboard input
   useInput((input, key) => {
@@ -202,11 +249,15 @@ const App = () => {
 
       {/* Project List */}
       <Box flexDirection="column" marginBottom={1}>
-        <Box marginBottom={1}>
-          <Text bold underline>
-            Projects: {selectedIndex + 1}/{projects.length}
-          </Text>
+        <Box gap={1} marginBottom={1}>
+          <Text bold>Varu</Text>
+          <Text dimColor>0.0.1</Text>
+
         </Box>
+
+        <Box marginBottom={1}><Text bold underline>
+          Projects: {selectedIndex + 1}/{projects.length}
+        </Text></Box>
 
         {projects.length === 0 ? (
           <Text color="yellow">No projects found</Text>
@@ -220,19 +271,27 @@ const App = () => {
 
             {projects.slice(scrollOffset, scrollOffset + VISIBLE_ITEMS).map((project, index) => {
               const actualIndex = scrollOffset + index;
-              const isSelected = actualIndex === selectedIndex
+              const isSelected = actualIndex === selectedIndex;
+              const processInfo = runningProcesses[project.path];
+
               return (
                 <Box justifyContent="space-between" borderStyle={isSelected ? "round" : ""} key={actualIndex} >
                   <Box gap={1}>
                     <Text inverse={isSelected} bold >
-                      {project.projectName}
+                      {" "} {project.projectName} {" "}
                     </Text>
                     <Text color="gray">
                       ({project.framework})
                     </Text>
+                    {processInfo && processInfo.hasDevServer && (
+                      <Text inverse color="green">{" "}running{" "}</Text>
+                    )}
+                    {processInfo && processInfo.hasEditor && (
+                      <Text color="cyan">vim</Text>
+                    )}
                   </Box>
                   {project.gitBranch && (
-                    <Text color="yellow"> [{project.gitBranch}]</Text>
+                    <Text color="yellow">[{project.gitBranch}]</Text>
                   )}
                 </Box>
               );

@@ -1,14 +1,21 @@
 {
-  "name": "dev-dashboard",
+  "name": "varu",
   "version": "0.0.1",
   "type": "module",
-  "description": "",
+  "description": "Dev dashboard for monitoring and control",
   "main": "src/index.js",
+  "bin": {
+    "varu": "./dist/index.js"
+  },
   "scripts": {
     "build": "esbuild src/index.js --bundle --platform=node --format=esm --outfile=dist/index.js --loader:.js=jsx --packages=external",
     "start": "npm run build && node dist/index.js",
-    "dev": "npm run build && node dist/index.js"
+    "dev": "npm run build && node dist/index.js",
+    "prepublishOnly": "npm run build"
   },
+  "files": [
+    "dist"
+  ],
   "dependencies": {
     "b4a": "^1.6.4",
     "fullscreen-ink": "^0.1.0",

@@ -5,7 +5,8 @@ import ConfigurationComponent from './components/configuration/configuration-com
 import { findPackageJsonFiles } from './commands/project-scanner.js';
 import { executeCommandInTerminal } from './commands/run-command.js';
 import { getTerminalsInPath } from './commands/process-monitor.js';
-import { useScreenSize } from "./hooks/useScreenSize.js"
+import { useScreenSize } from "./hooks/useScreenSize.js";
+import { getNodeModulesSize } from './utils/folder-size.js';
 
 const VERSION = "0.0.5"
 const App = () => {
@@ -19,6 +20,8 @@ const App = () => {
   const size = useScreenSize();
   const [scrollOffset, setScrollOffset] = useState(0);
   const [runningProcesses, setRunningProcesses] = useState({});
+  const [nodeModulesSizes, setNodeModulesSizes] = useState({});
+  const [scanningModules, setScanningModules] = useState(false);
 
   const reservedLines = 3 + 2 + 2 + 4 + 2; // base UI elements
   const detailsLines = (view === 'details' && projects[selectedIndex]) ? 10 : 0;
@@ -48,6 +51,53 @@ const App = () => {
         .finally(() => setScanning(false));
     }
   }, [isConfig, configuration]);
+
+  // Scan node_modules sizes incrementally
+  useEffect(() => {
+    if (projects.length === 0) return;
+
+    let currentIndex = 0;
+    let isActive = true;
+    setScanningModules(true);
+
+    const scanNextProject = async () => {
+      if (!isActive || projects.length === 0) return;
+
+      const project = projects[currentIndex];
+      try {
+        const sizeInfo = await getNodeModulesSize(project.path);
+
+        if (isActive) {
+          setNodeModulesSizes(prev => ({
+            ...prev,
+            [project.path]: sizeInfo
+          }));
+        }
+      } catch (err) {
+        // Silently fail for individual project checks
+      }
+
+      // Move to next project
+      currentIndex = (currentIndex + 1);
+
+      // If we've scanned all projects, stop
+      if (currentIndex >= projects.length) {
+        setScanningModules(false);
+        return;
+      }
+    };
+
+    // Check one project every 100ms for faster scanning
+    const interval = setInterval(scanNextProject, 100);
+
+    // Initial check
+    scanNextProject();
+
+    return () => {
+      isActive = false;
+      clearInterval(interval);
+    };
+  }, [projects]);
 
   // Monitor running processes incrementally
   useEffect(() => {
@@ -160,6 +210,7 @@ const App = () => {
       setScanning(true);
       setSelectedIndex(0);
       setScrollOffset(0);
+      setNodeModulesSizes({}); // Clear sizes for rescan
       findPackageJsonFiles(configuration.projectPath)
         .then((foundProjects) => {
           // Sort projects alphabetically by project name
@@ -208,6 +259,7 @@ const App = () => {
     setView('list');
     // Trigger re-scan
     setScanning(true);
+    setNodeModulesSizes({}); // Clear sizes for rescan
     findPackageJsonFiles(newConfig.projectPath)
       .then((foundProjects) => {
         // Sort projects alphabetically by project name
@@ -266,7 +318,9 @@ const App = () => {
         <Box gap={1} marginBottom={1}>
           <Text bold>Varu</Text>
           <Text dimColor>{VERSION}</Text>
-
+          {scanningModules && (
+            <Text color="yellow">📦 Scanning node_modules...</Text>
+          )}
         </Box>
 
         <Box marginBottom={1}><Text bold underline>
@@ -287,6 +341,7 @@ const App = () => {
               const actualIndex = scrollOffset + index;
               const isSelected = actualIndex === selectedIndex;
               const processInfo = runningProcesses[project.path];
+              const modulesInfo = nodeModulesSizes[project.path];
 
               return (
                 <Box justifyContent="space-between" borderStyle={isSelected ? "round" : ""} key={actualIndex} >
@@ -302,6 +357,9 @@ const App = () => {
                     )}
                     {processInfo && processInfo.hasEditor && (
                       <Text color="cyan">vim</Text>
+                    )}
+                    {modulesInfo && modulesInfo.exists && (
+                      <Text color="magenta">deps {modulesInfo.sizeFormatted}</Text>
                     )}
                   </Box>
                   {project.gitBranch && (
@@ -363,6 +421,18 @@ const App = () => {
                 {selectedProject.availableBranches.slice(0, 3).join(', ')}
                 {selectedProject.availableBranches.length > 3 && '...'}
               </Text>
+            </Text>
+          )}
+          {nodeModulesSizes[selectedProject.path] && (
+            <Text>
+              <Text bold>node_modules: </Text>
+              {nodeModulesSizes[selectedProject.path].exists ? (
+                <Text color="magenta">
+                  {nodeModulesSizes[selectedProject.path].sizeFormatted}
+                </Text>
+              ) : (
+                <Text color="gray">Not installed</Text>
+              )}
             </Text>
           )}
         </Box>

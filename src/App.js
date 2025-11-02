@@ -8,7 +8,7 @@ import { getTerminalsInPath } from './commands/process-monitor.js';
 import { useScreenSize } from "./hooks/useScreenSize.js";
 import { getNodeModulesSize } from './utils/folder-size.js';
 
-const VERSION = "0.0.5"
+const VERSION = "0.0.6"
 const App = () => {
   const { configuration, isConfig, loading } = useConfig();
   const [projects, setProjects] = useState([]);

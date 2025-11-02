@@ -250,7 +250,7 @@ const App = () => {
       <Box flexDirection="column" marginBottom={1}>
         <Box gap={1} marginBottom={1}>
           <Text bold>Varu</Text>
-          <Text dimColor>0.0.1</Text>
+          <Text dimColor>0.0.4</Text>
 
         </Box>
 

@@ -1,11 +1,11 @@
 {
   "name": "varucli",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "type": "module",
   "description": "Dev dashboard for monitoring and control",
   "main": "src/index.js",
   "bin": {
-    "varu": "./dist/index.js"
+    "varucli": "./dist/index.js"
   },
   "scripts": {
     "build": "esbuild src/index.js --bundle --platform=node --format=esm --outfile=dist/index.js --loader:.js=jsx --packages=external",

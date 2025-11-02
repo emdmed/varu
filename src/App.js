@@ -10,7 +10,7 @@ import { getNodeModulesSize } from './utils/folder-size.js';
 import Project from './components/project.js';
 import ProjectDetails from './components/project-details.js';
 
-const VERSION = "0.0.6"
+const VERSION = "0.0.7"
 const App = () => {
   const { configuration, isConfig, loading } = useConfig();
   const [projects, setProjects] = useState([]);

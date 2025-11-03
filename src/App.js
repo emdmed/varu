@@ -11,7 +11,7 @@ import Project from './components/project.js';
 import ProjectDetails from './components/project-details.js';
 import SearchInput from './components/search/search-input.js';
 
-const VERSION = "0.0.8"
+const VERSION = "0.0.9"
 const App = () => {
   const { configuration, isConfig, loading } = useConfig();
   const [projects, setProjects] = useState([]);

@@ -10,7 +10,7 @@ const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeMod
   const isRunning = processInfo && processInfo.hasDevServer
   const hasEditor = processInfo && processInfo.hasEditor
 
-  const borderStyle = isSelected ? "round" : "single"
+  const borderStyle = isSelected ? "" : ""
   const borderColor = isSelected ? undefined : "gray"
 
   return (
@@ -22,22 +22,22 @@ const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeMod
     >
       <Box gap={1}>
         <Text inverse={isSelected || isRunning} bold color={isRunning ? "green" : "white"} >
-          {" "} {project.projectName} {isRunning ? <Spinner type="triangle" /> : null} {" "}
+          {isSelected ? ">" : " "} {project.projectName} {isRunning ? <Spinner type="triangle" /> : null} {" "}
         </Text>
-        <Text color="gray">
+        <Text bold={isSelected} color="gray">
           ({project.framework})
         </Text>
         {modulesInfo && modulesInfo.exists && (
-          <Text color="magenta">Modules {modulesInfo.sizeFormatted}</Text>
+          <Text bold={isSelected} color="magenta">Modules {modulesInfo.sizeFormatted}</Text>
         )}
         {!modulesInfo && <Text color="magenta"><Spinner /></Text>}
       </Box>
       <Box gap={1}>
         {hasEditor && (
-          <Text color="cyan">{" "}[vim]{" "}</Text>
+          <Text bold={isSelected} color="cyan">{" "}[vim]{" "}</Text>
         )}
         {project.gitBranch && (
-          <Text color="yellow">[{project.gitBranch}]</Text>
+          <Text bold={isSelected} color="yellow">[{project.gitBranch}]</Text>
         )}
       </Box>
     </Box>

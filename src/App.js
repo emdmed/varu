@@ -10,6 +10,8 @@ import { getNodeModulesSize } from './utils/folder-size.js';
 import Project from './components/project.js';
 import ProjectDetails from './components/project-details.js';
 import SearchInput from './components/search/search-input.js';
+import CloneInput from './components/clone/clone-input.js';
+import { cloneRepository } from './commands/clone-repo.js';
 
 const VERSION = "0.0.9"
 const App = () => {
@@ -27,12 +29,17 @@ const App = () => {
   const [nodeModulesSizes, setNodeModulesSizes] = useState({});
   const [searchMode, setSearchMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [cloneMode, setCloneMode] = useState(false);
+  const [cloning, setCloning] = useState(false);
+  const [autoRefreshMode, setAutoRefreshMode] = useState(false);
+  const [expectedRepoName, setExpectedRepoName] = useState(null);
 
   const reservedLines = 3 + 2 + 2 + 4 + 2; // base UI elements
   const detailsLines = (view === 'details' && projects[selectedIndex]) ? 10 : 0;
   const searchLines = searchMode ? 2 : 0; // space for search input
+  const cloneLines = cloneMode ? 2 : 0; // space for clone input
   const scrollIndicatorLines = 2; // space for scroll indicators
-  const availableLines = Math.max(5, size.height - reservedLines - detailsLines - searchLines - scrollIndicatorLines);
+  const availableLines = Math.max(5, size.height - reservedLines - detailsLines - searchLines - cloneLines - scrollIndicatorLines);
   const VISIBLE_ITEMS = Math.max(5, availableLines); // minimum 5 items
 
   // Filter projects based on search query
@@ -116,8 +123,8 @@ const App = () => {
       }
     };
 
-    // Check one project every 100ms for faster scanning
-    const interval = setInterval(scanNextProject, 100);
+    // Check one project every 2 seconds to avoid overwhelming the system
+    const interval = setInterval(scanNextProject, 2000);
 
     // Initial check
     scanNextProject();
@@ -187,10 +194,66 @@ const App = () => {
     };
   }, [projects]);
 
+  // Auto-refresh after interactive clone to detect new repo
+  useEffect(() => {
+    if (!autoRefreshMode || !expectedRepoName) return;
+
+    let refreshCount = 0;
+    const maxRefreshes = 12; // Stop after 12 attempts (2 minutes with 10s interval)
+
+    const refreshProjects = async () => {
+      refreshCount++;
+
+      try {
+        const foundProjects = await findPackageJsonFiles(configuration.projectPath);
+        const sortedProjects = foundProjects.sort((a, b) =>
+          a.projectName.localeCompare(b.projectName, undefined, { sensitivity: 'base' })
+        );
+
+        // Check if the expected repo now exists
+        const newProjectIndex = sortedProjects.findIndex(p =>
+          p.projectName.toLowerCase() === expectedRepoName.toLowerCase()
+        );
+
+        if (newProjectIndex !== -1) {
+          // Found the new project!
+          setProjects(sortedProjects);
+          setSelectedIndex(newProjectIndex);
+          setScrollOffset(Math.max(0, newProjectIndex - Math.floor(VISIBLE_ITEMS / 2)));
+          setSuccessMessage(`✓ Successfully cloned ${expectedRepoName}`);
+          setAutoRefreshMode(false);
+          setExpectedRepoName(null);
+        } else if (refreshCount >= maxRefreshes) {
+          // Give up after max attempts
+          setAutoRefreshMode(false);
+          setExpectedRepoName(null);
+          setSuccessMessage(null);
+        } else {
+          // Update projects list but keep looking
+          setProjects(sortedProjects);
+        }
+      } catch (err) {
+        // Continue trying even on error
+      }
+    };
+
+    // Refresh every 10 seconds
+    const interval = setInterval(refreshProjects, 10000);
+
+    // Initial refresh after 5 seconds
+    const initialTimeout = setTimeout(refreshProjects, 5000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(initialTimeout);
+    };
+  }, [autoRefreshMode, expectedRepoName, configuration]);
+
   // Handle keyboard input
   useInput((input, key) => {
     if (view === 'config') return; // Let ConfigurationComponent handle input
     if (searchMode) return; // Let SearchInput handle input
+    if (cloneMode) return; // Let CloneInput handle input
 
     // Navigation
     if (key.upArrow || input === 'k') {
@@ -246,6 +309,10 @@ const App = () => {
       setSearchMode(true);
     }
 
+    if (input === 'g') {
+      setCloneMode(true);
+    }
+
     if (input === 'r') {
       // Refresh projects list
       setScanning(true);
@@ -254,6 +321,8 @@ const App = () => {
       setNodeModulesSizes({}); // Clear sizes for rescan
       setSearchQuery(''); // Clear search
       setSearchMode(false);
+      setAutoRefreshMode(false); // Stop auto-refresh if active
+      setExpectedRepoName(null);
       findPackageJsonFiles(configuration.projectPath)
         .then((foundProjects) => {
           // Sort projects alphabetically by project name
@@ -263,6 +332,13 @@ const App = () => {
           setProjects(sortedProjects);
         })
         .finally(() => setScanning(false));
+    }
+
+    if (input === 'x' && autoRefreshMode) {
+      // Cancel auto-refresh mode
+      setAutoRefreshMode(false);
+      setExpectedRepoName(null);
+      setSuccessMessage(null);
     }
 
     if (input === 'q' || (key.ctrl && input === 'c')) {
@@ -277,6 +353,66 @@ const App = () => {
 
   const handleSearchCancel = () => {
     setSearchMode(false);
+  };
+
+  const handleCloneSubmit = async (url) => {
+    setCloneMode(false);
+    setCloning(true);
+    setError(null);
+
+    try {
+      const result = await cloneRepository({
+        url,
+        destinationPath: configuration.projectPath
+      });
+
+      if (result.interactive) {
+        // For interactive clones (SSH/auth required), enable auto-refresh mode
+        setSuccessMessage(`✓ ${result.message}. Auto-refreshing to detect completion...`);
+        setCloning(false);
+        setExpectedRepoName(result.repoName);
+        setAutoRefreshMode(true);
+      } else {
+        // For non-interactive clones, immediately refresh
+        setSuccessMessage(`✓ ${result.message}`);
+
+        // Refresh projects list to include the newly cloned repo
+        setScanning(true);
+        setNodeModulesSizes({}); // Clear sizes for rescan
+        findPackageJsonFiles(configuration.projectPath)
+          .then((foundProjects) => {
+            // Sort projects alphabetically by project name
+            const sortedProjects = foundProjects.sort((a, b) =>
+              a.projectName.localeCompare(b.projectName, undefined, { sensitivity: 'base' })
+            );
+            setProjects(sortedProjects);
+
+            // Try to select the newly cloned project
+            const newProjectIndex = sortedProjects.findIndex(p =>
+              p.projectName.toLowerCase() === result.repoName.toLowerCase()
+            );
+            if (newProjectIndex !== -1) {
+              setSelectedIndex(newProjectIndex);
+              setScrollOffset(Math.max(0, newProjectIndex - Math.floor(VISIBLE_ITEMS / 2)));
+            }
+          })
+          .catch((err) => {
+            setError(`Error scanning projects: ${err.message}`);
+          })
+          .finally(() => {
+            setScanning(false);
+            setCloning(false);
+          });
+      }
+    } catch (err) {
+      setError(`Clone failed: ${err.message}`);
+      setCloning(false);
+      setTimeout(() => setError(null), 5000);
+    }
+  };
+
+  const handleCloneCancel = () => {
+    setCloneMode(false);
   };
 
   const openProject = async (project) => {
@@ -452,6 +588,25 @@ const App = () => {
             />
           )}
 
+          {cloneMode && (
+            <CloneInput
+              onSubmit={handleCloneSubmit}
+              onCancel={handleCloneCancel}
+            />
+          )}
+
+          {cloning && (
+            <Box marginBottom={1}>
+              <Text color="yellow">⏳ Cloning repository...</Text>
+            </Box>
+          )}
+
+          {autoRefreshMode && expectedRepoName && (
+            <Box marginBottom={1}>
+              <Text color="cyan">🔄 Watching for {expectedRepoName}... (auto-refreshing every 10s, press x to cancel)</Text>
+            </Box>
+          )}
+
           {searchQuery && !searchMode && (
             <Box marginBottom={1}>
               <Text inverse dimColor>
@@ -507,7 +662,7 @@ const App = () => {
           flexDirection="column"
         >
           <Text color="gray">
-            ↑/↓ or j/k: Navigate | Enter: nvim | s: toggle server | d: Toggle details | i: Filter | r: Refresh | c: Configure | q: Quit
+            ↑/↓ or j/k: Navigate | Enter: nvim | s: toggle server | d: Toggle details | i: Filter | g: Clone repo | r: Refresh | c: Configure | q: Quit
           </Text>
         </Box>
       </Box>

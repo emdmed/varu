@@ -1,38 +1,36 @@
-import { readdir, stat } from 'fs/promises';
+import { stat } from 'fs/promises';
 import { join } from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 /**
- * Calculate the size of a folder in bytes
+ * Calculate the size of a folder using du command (fast)
  * @param {string} folderPath - Path to the folder
  * @returns {Promise<number>} - Size in bytes
  */
 export const getFolderSize = async (folderPath) => {
-  let totalSize = 0;
-
   try {
-    const items = await readdir(folderPath, { withFileTypes: true });
+    // Use du command which is much faster than recursive scanning
+    // -sb: summarize, show in bytes
+    // Timeout after 5 seconds to prevent hanging
+    const { stdout } = await execAsync(`du -sb "${folderPath}" 2>/dev/null`, {
+      timeout: 5000,
+      maxBuffer: 1024 * 1024 // 1MB buffer
+    });
 
-    for (const item of items) {
-      const itemPath = join(folderPath, item.name);
-
-      try {
-        if (item.isDirectory()) {
-          totalSize += await getFolderSize(itemPath);
-        } else if (item.isFile()) {
-          const stats = await stat(itemPath);
-          totalSize += stats.size;
-        }
-      } catch (err) {
-        // Skip items we can't access (permissions, etc.)
-        continue;
-      }
+    // Parse output: "12345678    /path/to/folder"
+    const sizeMatch = stdout.match(/^(\d+)/);
+    if (sizeMatch) {
+      return parseInt(sizeMatch[1], 10);
     }
+
+    return 0;
   } catch (err) {
-    // If we can't read the directory, return 0
+    // If du fails or times out, return 0
     return 0;
   }
-
-  return totalSize;
 };
 
 /**

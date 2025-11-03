@@ -47,7 +47,17 @@ const ConfigurationComponent = ({ onComplete }) => {
         return;
       }
 
+      // Load existing config to preserve nodeModulesSizes
+      let existingConfig = {};
+      try {
+        const configData = await fs.readFile(configPath, 'utf-8');
+        existingConfig = JSON.parse(configData);
+      } catch {
+        // Config doesn't exist yet, that's fine
+      }
+
       const config = {
+        ...existingConfig, // Preserve existing data like nodeModulesSizes
         projectPath: expandedPath,
         updatedAt: new Date().toISOString()
       };

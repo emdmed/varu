@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
@@ -8,33 +8,47 @@ const useConfig = () => {
   const [isConfig, setIsConfig] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [nodeModulesSizes, setNodeModulesSizes] = useState({});
 
-  useEffect(() => {
-    const loadConfig = async () => {
-      try {
-        setLoading(true);
+  const loadConfig = useCallback(async () => {
+    try {
+      setLoading(true);
 
-        const configPath = path.join(os.homedir(), '.lazylauncher', 'config.json');
+      const configPath = path.join(os.homedir(), '.lazylauncher', 'config.json');
 
-        const configData = await fs.readFile(configPath, 'utf-8');
-        const data = JSON.parse(configData);
+      const configData = await fs.readFile(configPath, 'utf-8');
+      const data = JSON.parse(configData);
 
-        setConfiguration(data);
-        setIsConfig(true);
-      } catch (err) {
-        console.error('Failed to load config:', err);
-        setIsConfig(false);
-        setConfiguration(null);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadConfig();
+      setConfiguration(data);
+      setNodeModulesSizes(data.nodeModulesSizes || {});
+      setIsConfig(true);
+    } catch (err) {
+      console.error('Failed to load config:', err);
+      setIsConfig(false);
+      setConfiguration(null);
+      setNodeModulesSizes({});
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  return { configuration, isConfig, loading, error };
+  useEffect(() => {
+    loadConfig();
+  }, [loadConfig]);
+
+  const reloadConfig = useCallback(async () => {
+    await loadConfig();
+  }, [loadConfig]);
+
+  return {
+    configuration,
+    isConfig,
+    loading,
+    error,
+    nodeModulesSizes,
+    reloadConfig
+  };
 };
 
 export default useConfig;

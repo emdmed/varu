@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import useConfig from './hooks/useConfig.js';
 import ConfigurationComponent from './components/configuration/configuration-component.js';
@@ -7,6 +7,7 @@ import { executeCommandInTerminal } from './commands/run-command.js';
 import { getTerminalsInPath, killProcessesInPath } from './commands/process-monitor.js';
 import { useScreenSize } from "./hooks/useScreenSize.js";
 import { getNodeModulesSize } from './utils/folder-size.js';
+import { saveNodeModulesSizes } from './utils/config-manager.js';
 import Project from './components/project.js';
 import ProjectDetails from './components/project-details.js';
 import SearchInput from './components/search/search-input.js';
@@ -15,7 +16,7 @@ import { cloneRepository } from './commands/clone-repo.js';
 
 const VERSION = "0.0.9"
 const App = () => {
-  const { configuration, isConfig, loading } = useConfig();
+  const { configuration, isConfig, loading, nodeModulesSizes: configSizes, reloadConfig } = useConfig();
   const [projects, setProjects] = useState([]);
   const [scanning, setScanning] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -33,6 +34,8 @@ const App = () => {
   const [cloning, setCloning] = useState(false);
   const [autoRefreshMode, setAutoRefreshMode] = useState(false);
   const [expectedRepoName, setExpectedRepoName] = useState(null);
+  const [scanningNodeModules, setScanningNodeModules] = useState(false);
+  const [scanProgress, setScanProgress] = useState({ current: 0, total: 0 });
 
   const reservedLines = 3 + 2 + 2 + 4 + 2; // base UI elements
   const detailsLines = (view === 'details' && projects[selectedIndex]) ? 10 : 0;
@@ -48,6 +51,66 @@ const App = () => {
       project.projectName.toLowerCase().includes(searchQuery.toLowerCase())
     )
     : projects;
+
+  // Scan all node_modules sizes
+  const scanAllNodeModules = useCallback(async () => {
+    if (scanningNodeModules || projects.length === 0) return;
+
+    console.log('Starting node_modules scan for', projects.length, 'projects');
+    setScanningNodeModules(true);
+    setScanProgress({ current: 0, total: projects.length });
+    setError(null);
+
+    const newSizes = {};
+
+    try {
+      for (let i = 0; i < projects.length; i++) {
+        const project = projects[i];
+        const startTime = Date.now();
+
+        try {
+          const sizeInfo = await getNodeModulesSize(project.path);
+
+          newSizes[project.path] = {
+            ...sizeInfo,
+            scannedAt: new Date().toISOString()
+          };
+        } catch (err) {
+          // If a single project fails, continue with others
+          newSizes[project.path] = {
+            exists: false,
+            sizeBytes: 0,
+            sizeFormatted: null,
+            scannedAt: new Date().toISOString(),
+            error: err.message
+          };
+        }
+
+        setScanProgress({ current: i + 1, total: projects.length });
+        setNodeModulesSizes({ ...newSizes }); // Update UI incrementally
+
+        // Add a small delay to make progress visible (minimum 300ms per project)
+        const elapsed = Date.now() - startTime;
+        if (elapsed < 300) {
+          await new Promise(resolve => setTimeout(resolve, 300 - elapsed));
+        }
+      }
+
+      // Save to config
+      console.log('Saving', Object.keys(newSizes).length, 'sizes to config');
+      await saveNodeModulesSizes(newSizes);
+      await reloadConfig();
+
+      setSuccessMessage(`✓ Scan complete! Updated sizes for ${projects.length} project${projects.length > 1 ? 's' : ''}.`);
+    } catch (err) {
+      console.error('Scan error:', err);
+      setError(`Scan failed: ${err.message}`);
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setScanningNodeModules(false);
+      setScanProgress({ current: 0, total: 0 });
+    }
+  }, [projects, scanningNodeModules, reloadConfig]);
 
   // Clear success message after 3 seconds
   useEffect(() => {
@@ -90,50 +153,26 @@ const App = () => {
     }
   }, [searchQuery]);
 
-  // Scan node_modules sizes incrementally
+  // Load node_modules sizes from config on mount
   useEffect(() => {
-    if (projects.length === 0) return;
+    if (configSizes && Object.keys(configSizes).length > 0) {
+      setNodeModulesSizes(configSizes);
+    }
+  }, [configSizes]);
 
-    let currentIndex = 0;
-    let isActive = true;
+  // Auto-scan on first load if no sizes exist in config
+  useEffect(() => {
+    if (projects.length === 0 || scanning || scanningNodeModules) return;
 
-    const scanNextProject = async () => {
-      if (!isActive || projects.length === 0) return;
+    // Check if this is first load (no sizes in config)
+    const hasSizes = configSizes && Object.keys(configSizes).length > 0;
 
-      const project = projects[currentIndex];
-      try {
-        const sizeInfo = await getNodeModulesSize(project.path);
-
-        if (isActive) {
-          setNodeModulesSizes(prev => ({
-            ...prev,
-            [project.path]: sizeInfo
-          }));
-        }
-      } catch (err) {
-        // Silently fail for individual project checks
-      }
-
-      // Move to next project
-      currentIndex = (currentIndex + 1);
-
-      // If we've scanned all projects, stop
-      if (currentIndex >= projects.length) {
-        return;
-      }
-    };
-
-    // Check one project every 2 seconds to avoid overwhelming the system
-    const interval = setInterval(scanNextProject, 2000);
-
-    // Initial check
-    scanNextProject();
-
-    return () => {
-      isActive = false;
-      clearInterval(interval);
-    };
-  }, [projects]);
+    if (!hasSizes && projects.length > 0) {
+      console.log('Auto-scanning node_modules on first load...', projects.length, 'projects');
+      // Automatically scan on first load
+      scanAllNodeModules();
+    }
+  }, [projects, configSizes, scanning, scanningNodeModules, scanAllNodeModules]);
 
   // Monitor running processes incrementally
   useEffect(() => {
@@ -339,6 +378,11 @@ const App = () => {
       setAutoRefreshMode(false);
       setExpectedRepoName(null);
       setSuccessMessage(null);
+    }
+
+    if (input === 'S') {
+      // Shift+S to scan node_modules sizes
+      scanAllNodeModules();
     }
 
     if (input === 'q' || (key.ctrl && input === 'c')) {
@@ -607,6 +651,14 @@ const App = () => {
             </Box>
           )}
 
+          {scanningNodeModules && (
+            <Box marginBottom={1}>
+              <Text color="yellow">
+                📊 Scanning node_modules... ({scanProgress.current}/{scanProgress.total})
+              </Text>
+            </Box>
+          )}
+
           {searchQuery && !searchMode && (
             <Box marginBottom={1}>
               <Text inverse dimColor>
@@ -662,7 +714,7 @@ const App = () => {
           flexDirection="column"
         >
           <Text color="gray">
-            ↑/↓ or j/k: Navigate | Enter: nvim | s: toggle server | d: Toggle details | i: Filter | g: Clone repo | r: Refresh | c: Configure | q: Quit
+            ↑/↓ or j/k: Navigate | Enter: nvim | s: toggle server | d: Toggle details | i: Filter | g: Clone repo | S: Scan sizes | r: Refresh | c: Configure | q: Quit
           </Text>
         </Box>
       </Box>

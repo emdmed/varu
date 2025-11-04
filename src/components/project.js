@@ -36,7 +36,7 @@ const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeMod
         {modulesInfo && modulesInfo.exists && (
           <Text bold={isSelected} color="magenta">deps {modulesInfo.sizeFormatted}</Text>
         )}
-        {!modulesInfo && <Text color="magenta"><Spinner /></Text>}
+        {modulesInfo === undefined && <Text color="magenta"><Spinner /></Text>}
         {project.gitBranch && (
           <Text bold={isSelected} color="yellow">[{project.gitBranch}]</Text>
         )}

@@ -1,6 +1,6 @@
 {
   "name": "varucli",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "type": "module",
   "description": "Dev dashboard for monitoring and control",
   "main": "src/index.js",

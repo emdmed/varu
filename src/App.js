@@ -20,7 +20,7 @@ const App = () => {
   const [projects, setProjects] = useState([]);
   const [scanning, setScanning] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [view, setView] = useState('list'); // 'list', 'details', 'config'
+  const [view, setView] = useState('list');
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   const { exit } = useApp();
@@ -37,22 +37,20 @@ const App = () => {
   const [scanningNodeModules, setScanningNodeModules] = useState(false);
   const [scanProgress, setScanProgress] = useState({ current: 0, total: 0 });
 
-  const reservedLines = 3 + 2 + 2 + 4 + 2; // base UI elements
+  const reservedLines = 3 + 2 + 2 + 4 + 2;
   const detailsLines = (view === 'details' && projects[selectedIndex]) ? 10 : 0;
-  const searchLines = searchMode ? 2 : 0; // space for search input
-  const cloneLines = cloneMode ? 2 : 0; // space for clone input
-  const scrollIndicatorLines = 2; // space for scroll indicators
+  const searchLines = searchMode ? 2 : 0;
+  const cloneLines = cloneMode ? 2 : 0;
+  const scrollIndicatorLines = 2;
   const availableLines = Math.max(5, size.height - reservedLines - detailsLines - searchLines - cloneLines - scrollIndicatorLines);
-  const VISIBLE_ITEMS = Math.max(5, availableLines); // minimum 5 items
+  const VISIBLE_ITEMS = Math.max(5, availableLines);
 
-  // Filter projects based on search query
   const filteredProjects = searchQuery
     ? projects.filter(project =>
       project.projectName.toLowerCase().includes(searchQuery.toLowerCase())
     )
     : projects;
 
-  // Scan all node_modules sizes
   const scanAllNodeModules = useCallback(async () => {
     if (scanningNodeModules || projects.length === 0) return;
 
@@ -76,7 +74,6 @@ const App = () => {
             scannedAt: new Date().toISOString()
           };
         } catch (err) {
-          // If a single project fails, continue with others
           newSizes[project.path] = {
             exists: false,
             sizeBytes: 0,
@@ -87,16 +84,15 @@ const App = () => {
         }
 
         setScanProgress({ current: i + 1, total: projects.length });
-        setNodeModulesSizes({ ...newSizes }); // Update UI incrementally
+        setNodeModulesSizes({ ...newSizes });
 
-        // Add a small delay to make progress visible (minimum 300ms per project)
+
         const elapsed = Date.now() - startTime;
         if (elapsed < 300) {
           await new Promise(resolve => setTimeout(resolve, 300 - elapsed));
         }
       }
 
-      // Save to config
       console.log('Saving', Object.keys(newSizes).length, 'sizes to config');
       await saveNodeModulesSizes(newSizes);
       await reloadConfig();
@@ -112,7 +108,6 @@ const App = () => {
     }
   }, [projects, scanningNodeModules, reloadConfig]);
 
-  // Clear success message after 3 seconds
   useEffect(() => {
     if (successMessage) {
       const timer = setTimeout(() => {
@@ -122,14 +117,12 @@ const App = () => {
     }
   }, [successMessage]);
 
-  // Scan for projects when config is loaded
   useEffect(() => {
     if (isConfig && configuration?.projectPath) {
       setScanning(true);
       setError(null);
       findPackageJsonFiles(configuration.projectPath)
         .then((foundProjects) => {
-          // Sort projects alphabetically by project name
           const sortedProjects = foundProjects.sort((a, b) =>
             a.projectName.localeCompare(b.projectName, undefined, { sensitivity: 'base' })
           );
@@ -145,7 +138,6 @@ const App = () => {
     }
   }, [isConfig, configuration]);
 
-  // Reset selectedIndex when search results change
   useEffect(() => {
     if (searchQuery && filteredProjects.length > 0) {
       setSelectedIndex(0);
@@ -153,28 +145,23 @@ const App = () => {
     }
   }, [searchQuery]);
 
-  // Load node_modules sizes from config on mount
   useEffect(() => {
     if (configSizes && Object.keys(configSizes).length > 0) {
       setNodeModulesSizes(configSizes);
     }
   }, [configSizes]);
 
-  // Auto-scan on first load if no sizes exist in config
   useEffect(() => {
     if (projects.length === 0 || scanning || scanningNodeModules) return;
 
-    // Check if this is first load (no sizes in config)
     const hasSizes = configSizes && Object.keys(configSizes).length > 0;
 
     if (!hasSizes && projects.length > 0) {
       console.log('Auto-scanning node_modules on first load...', projects.length, 'projects');
-      // Automatically scan on first load
       scanAllNodeModules();
     }
   }, [projects, configSizes, scanning, scanningNodeModules, scanAllNodeModules]);
 
-  // Monitor running processes incrementally
   useEffect(() => {
     if (projects.length === 0) return;
 
@@ -206,7 +193,6 @@ const App = () => {
             }
           }));
         } else if (isActive) {
-          // Remove from state if no terminals found
           setRunningProcesses(prev => {
             const newState = { ...prev };
             delete newState[project.path];
@@ -214,17 +200,13 @@ const App = () => {
           });
         }
       } catch (err) {
-        // Silently fail for individual project checks
       }
 
-      // Move to next project
       currentIndex = (currentIndex + 1) % projects.length;
     };
 
-    // Check one project every 500ms (all projects checked in projectCount * 0.5 seconds)
     const interval = setInterval(checkNextProject, 500);
 
-    // Initial check
     checkNextProject();
 
     return () => {
@@ -233,12 +215,11 @@ const App = () => {
     };
   }, [projects]);
 
-  // Auto-refresh after interactive clone to detect new repo
   useEffect(() => {
     if (!autoRefreshMode || !expectedRepoName) return;
 
     let refreshCount = 0;
-    const maxRefreshes = 12; // Stop after 12 attempts (2 minutes with 10s interval)
+    const maxRefreshes = 12;
 
     const refreshProjects = async () => {
       refreshCount++;
@@ -249,13 +230,11 @@ const App = () => {
           a.projectName.localeCompare(b.projectName, undefined, { sensitivity: 'base' })
         );
 
-        // Check if the expected repo now exists
         const newProjectIndex = sortedProjects.findIndex(p =>
           p.projectName.toLowerCase() === expectedRepoName.toLowerCase()
         );
 
         if (newProjectIndex !== -1) {
-          // Found the new project!
           setProjects(sortedProjects);
           setSelectedIndex(newProjectIndex);
           setScrollOffset(Math.max(0, newProjectIndex - Math.floor(VISIBLE_ITEMS / 2)));
@@ -263,23 +242,18 @@ const App = () => {
           setAutoRefreshMode(false);
           setExpectedRepoName(null);
         } else if (refreshCount >= maxRefreshes) {
-          // Give up after max attempts
           setAutoRefreshMode(false);
           setExpectedRepoName(null);
           setSuccessMessage(null);
         } else {
-          // Update projects list but keep looking
           setProjects(sortedProjects);
         }
       } catch (err) {
-        // Continue trying even on error
       }
     };
 
-    // Refresh every 10 seconds
     const interval = setInterval(refreshProjects, 10000);
 
-    // Initial refresh after 5 seconds
     const initialTimeout = setTimeout(refreshProjects, 5000);
 
     return () => {
@@ -288,17 +262,15 @@ const App = () => {
     };
   }, [autoRefreshMode, expectedRepoName, configuration]);
 
-  // Handle keyboard input
   useInput((input, key) => {
-    if (view === 'config') return; // Let ConfigurationComponent handle input
-    if (searchMode) return; // Let SearchInput handle input
-    if (cloneMode) return; // Let CloneInput handle input
+    if (view === 'config') return;
+    if (searchMode) return;
+    if (cloneMode) return;
 
-    // Navigation
+
     if (key.upArrow || input === 'k') {
       setSelectedIndex(prev => {
         const newIndex = Math.max(0, prev - 1);
-        // Scroll up if selection moves above visible window
         if (newIndex < scrollOffset) {
           setScrollOffset(newIndex);
         }
@@ -308,7 +280,6 @@ const App = () => {
     if (key.downArrow || input === 'j') {
       setSelectedIndex(prev => {
         const newIndex = Math.min(filteredProjects.length - 1, prev + 1);
-        // Scroll down if selection moves below visible window
         if (newIndex >= scrollOffset + VISIBLE_ITEMS) {
           setScrollOffset(newIndex - VISIBLE_ITEMS + 1);
         }
@@ -316,7 +287,6 @@ const App = () => {
       });
     }
 
-    // Actions
     if (key.return) {
       if (filteredProjects[selectedIndex]) {
         openProject(filteredProjects[selectedIndex]);
@@ -327,7 +297,6 @@ const App = () => {
       if (filteredProjects[selectedIndex]) {
         const processInfo = runningProcesses[filteredProjects[selectedIndex].path];
 
-        // If server is running, stop it. Otherwise, start it.
         if (processInfo && processInfo.hasDevServer) {
           stopServer(filteredProjects[selectedIndex]);
         } else {
@@ -353,18 +322,16 @@ const App = () => {
     }
 
     if (input === 'r') {
-      // Refresh projects list
       setScanning(true);
       setSelectedIndex(0);
       setScrollOffset(0);
-      setNodeModulesSizes({}); // Clear sizes for rescan
-      setSearchQuery(''); // Clear search
+      setNodeModulesSizes({});
+      setSearchQuery('');
       setSearchMode(false);
-      setAutoRefreshMode(false); // Stop auto-refresh if active
+      setAutoRefreshMode(false);
       setExpectedRepoName(null);
       findPackageJsonFiles(configuration.projectPath)
         .then((foundProjects) => {
-          // Sort projects alphabetically by project name
           const sortedProjects = foundProjects.sort((a, b) =>
             a.projectName.localeCompare(b.projectName, undefined, { sensitivity: 'base' })
           );
@@ -374,14 +341,12 @@ const App = () => {
     }
 
     if (input === 'x' && autoRefreshMode) {
-      // Cancel auto-refresh mode
       setAutoRefreshMode(false);
       setExpectedRepoName(null);
       setSuccessMessage(null);
     }
 
     if (input === 'S') {
-      // Shift+S to scan node_modules sizes
       scanAllNodeModules();
     }
 
@@ -411,27 +376,22 @@ const App = () => {
       });
 
       if (result.interactive) {
-        // For interactive clones (SSH/auth required), enable auto-refresh mode
         setSuccessMessage(`✓ ${result.message}. Auto-refreshing to detect completion...`);
         setCloning(false);
         setExpectedRepoName(result.repoName);
         setAutoRefreshMode(true);
       } else {
-        // For non-interactive clones, immediately refresh
         setSuccessMessage(`✓ ${result.message}`);
 
-        // Refresh projects list to include the newly cloned repo
         setScanning(true);
-        setNodeModulesSizes({}); // Clear sizes for rescan
+        setNodeModulesSizes({});
         findPackageJsonFiles(configuration.projectPath)
           .then((foundProjects) => {
-            // Sort projects alphabetically by project name
             const sortedProjects = foundProjects.sort((a, b) =>
               a.projectName.localeCompare(b.projectName, undefined, { sensitivity: 'base' })
             );
             setProjects(sortedProjects);
 
-            // Try to select the newly cloned project
             const newProjectIndex = sortedProjects.findIndex(p =>
               p.projectName.toLowerCase() === result.repoName.toLowerCase()
             );
@@ -461,7 +421,6 @@ const App = () => {
 
   const openProject = async (project) => {
     try {
-      // Open in nvim using the executeCommandInTerminal function
       await executeCommandInTerminal({
         command: 'nvim .',
         path: project.path
@@ -474,7 +433,6 @@ const App = () => {
 
   const runDevServer = async (project) => {
     try {
-      // Determine the command to run based on project.command or default to npm run dev
       const devCommand = project.command !== 'N/A' ? project.command : 'npm run dev';
 
       await executeCommandInTerminal({
@@ -497,14 +455,11 @@ const App = () => {
         return;
       }
 
-      // Kill all processes in the project path
       const killedCount = await killProcessesInPath(project.path);
 
       if (killedCount > 0) {
         setSuccessMessage(`✓ Stopped ${killedCount} process${killedCount > 1 ? 'es' : ''} for ${project.projectName}`);
-        // Clear error if any
         setError(null);
-        // Immediately update the running processes state
         setRunningProcesses(prev => {
           const newState = { ...prev };
           delete newState[project.path];
@@ -523,14 +478,12 @@ const App = () => {
 
   const handleConfigComplete = (newConfig) => {
     setView('list');
-    // Trigger re-scan
     setScanning(true);
-    setNodeModulesSizes({}); // Clear sizes for rescan
-    setSearchQuery(''); // Clear search
+    setNodeModulesSizes({});
+    setSearchQuery('');
     setSearchMode(false);
     findPackageJsonFiles(newConfig.projectPath)
       .then((foundProjects) => {
-        // Sort projects alphabetically by project name
         const sortedProjects = foundProjects.sort((a, b) =>
           a.projectName.localeCompare(b.projectName, undefined, { sensitivity: 'base' })
         );
@@ -539,7 +492,6 @@ const App = () => {
       .finally(() => setScanning(false));
   };
 
-  // Show configuration screen if no config
   if (!loading && !isConfig) {
     return (
       <>
@@ -551,7 +503,6 @@ const App = () => {
     );
   }
 
-  // Show reconfiguration screen
   if (view === 'config') {
     return (
       <>
@@ -563,7 +514,6 @@ const App = () => {
     );
   }
 
-  // Loading state
   if (loading || scanning) {
     return (
       <>
@@ -582,7 +532,6 @@ const App = () => {
     );
   }
 
-  // Error state
   if (error) {
     return (
       <>
@@ -603,7 +552,6 @@ const App = () => {
 
   const selectedProject = filteredProjects[selectedIndex];
 
-  // Main UI
   return (
     <>
       <Box>

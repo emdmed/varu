@@ -27,15 +27,16 @@ const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeMod
         <Text bold={isSelected} color="gray">
           ({project.framework})
         </Text>
-        {modulesInfo && modulesInfo.exists && (
-          <Text bold={isSelected} color="magenta">Modules {modulesInfo.sizeFormatted}</Text>
-        )}
-        {!modulesInfo && <Text color="magenta"><Spinner /></Text>}
+
       </Box>
       <Box gap={1}>
         {hasEditor && (
           <Text bold={isSelected} color="cyan">{" "}[vim]{" "}</Text>
         )}
+        {modulesInfo && modulesInfo.exists && (
+          <Text bold={isSelected} color="magenta">deps {modulesInfo.sizeFormatted}</Text>
+        )}
+        {!modulesInfo && <Text color="magenta"><Spinner /></Text>}
         {project.gitBranch && (
           <Text bold={isSelected} color="yellow">[{project.gitBranch}]</Text>
         )}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
+import clipboardy from 'clipboardy';
 import useConfig from './hooks/useConfig.js';
 import { useProjectScanner } from './hooks/useProjectScanner.js';
 import { useProjectNavigation } from './hooks/useProjectNavigation.js';
@@ -34,6 +35,7 @@ const App = () => {
   const [helpMode, setHelpMode] = useState(false);
   const [cleanupMode, setCleanupMode] = useState(false);
   const [staleProjects, setStaleProjects] = useState([]);
+  const [clipboardUrl, setClipboardUrl] = useState('');
 
   // Custom hooks
   const { projects, setProjects, scanning, setScanning, error, setError } = useProjectScanner(configuration, isConfig);
@@ -59,9 +61,43 @@ const App = () => {
     }
   };
 
+  // Helper function to validate if clipboard contains a git URL
+  const isValidGitUrl = (url) => {
+    if (!url || typeof url !== 'string') return false;
+    const trimmed = url.trim();
+    return (
+      trimmed.startsWith('https://') ||
+      trimmed.startsWith('git@') ||
+      trimmed.startsWith('git://') ||
+      trimmed.startsWith('ssh://')
+    );
+  };
+
+  // Read clipboard and open clone mode with pre-filled URL if valid
+  const handleOpenCloneMode = async () => {
+    try {
+      const clipboardContent = await clipboardy.read();
+      if (isValidGitUrl(clipboardContent)) {
+        setClipboardUrl(clipboardContent.trim());
+      } else {
+        setClipboardUrl('');
+      }
+    } catch (err) {
+      // Silently fail - user can still manually paste
+      setClipboardUrl('');
+    }
+    openCloneMode();
+  };
+
   const { cloneMode, autoRefreshMode, handleCloneSubmit, handleCloneCancel, openCloneMode, cancelAutoRefresh } = useCloneMode(configuration, VISIBLE_ITEMS, handleCloneRefresh);
 
   const { selectedIndex, scrollOffset } = navigation;
+
+  // Wrapper to reset clipboard URL when cancelling clone
+  const handleCloneCancelWrapper = () => {
+    setClipboardUrl('');
+    handleCloneCancel();
+  };
 
   useInput((input, key) => {
     if (view === 'config') return;
@@ -111,7 +147,7 @@ const App = () => {
     }
 
     if (input === 'c') {
-      openCloneMode();
+      handleOpenCloneMode();
     }
 
     if (input === 'C') {
@@ -166,6 +202,7 @@ const App = () => {
 
   const handleCloneSubmitWrapper = async (url) => {
     setError(null);
+    setClipboardUrl(''); // Reset clipboard URL after submission
 
     try {
       const result = await handleCloneSubmit(url);
@@ -455,7 +492,8 @@ const App = () => {
           {cloneMode && (
             <CloneInput
               onSubmit={handleCloneSubmitWrapper}
-              onCancel={handleCloneCancel}
+              onCancel={handleCloneCancelWrapper}
+              initialValue={clipboardUrl}
             />
           )}
 

@@ -9,6 +9,7 @@ const useConfig = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [nodeModulesSizes, setNodeModulesSizes] = useState({});
+  const [projectLastStarted, setProjectLastStarted] = useState({});
 
   const loadConfig = useCallback(async () => {
     try {
@@ -21,12 +22,14 @@ const useConfig = () => {
 
       setConfiguration(data);
       setNodeModulesSizes(data.nodeModulesSizes || {});
+      setProjectLastStarted(data.projectLastStarted || {});
       setIsConfig(true);
     } catch (err) {
       console.error('Failed to load config:', err);
       setIsConfig(false);
       setConfiguration(null);
       setNodeModulesSizes({});
+      setProjectLastStarted({});
       setError(err.message);
     } finally {
       setLoading(false);
@@ -47,6 +50,7 @@ const useConfig = () => {
     loading,
     error,
     nodeModulesSizes,
+    projectLastStarted,
     reloadConfig
   };
 };

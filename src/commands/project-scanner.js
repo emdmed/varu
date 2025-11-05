@@ -35,15 +35,41 @@ const getAllGitBranches = async (dir) => {
 };
 
 const findFramework = (jsonPackage) => {
-  if (jsonPackage?.scripts?.dev?.includes("vite"))
-    return { framework: "vite", command: "npm run dev" };
-  if (jsonPackage?.scripts?.start?.includes("node"))
-    return { framework: "node", command: "npm start" };
-  if (jsonPackage?.scripts?.dev?.includes("next"))
-    return { framework: "next", command: "npm run dev" };
-  if (jsonPackage?.scripts?.start?.includes("react") || jsonPackage?.scripts?.start?.includes("webpack"))
-    return { framework: "react", command: "npm start" };
-  return { framework: "unknown", command: "N/A" };
+  if (!jsonPackage?.scripts) {
+    return { framework: "unknown", command: null };
+  }
+
+  const scripts = jsonPackage.scripts;
+
+  if (scripts.dev) {
+    if (scripts.dev.includes("vite")) {
+      return { framework: "vite", command: "npm run dev" };
+    }
+    if (scripts.dev.includes("next")) {
+      return { framework: "next", command: "npm run dev" };
+    }
+    return { framework: "unknown", command: "npm run dev" };
+  }
+
+  if (scripts.start) {
+    if (scripts.start.includes("node")) {
+      return { framework: "node", command: "npm start" };
+    }
+    if (scripts.start.includes("react") || scripts.start.includes("webpack")) {
+      return { framework: "react", command: "npm start" };
+    }
+    return { framework: "unknown", command: "npm start" };
+  }
+
+  if (scripts.serve) {
+    return { framework: "unknown", command: "npm run serve" };
+  }
+
+  if (scripts.develop) {
+    return { framework: "unknown", command: "npm run develop" };
+  }
+
+  return { framework: "unknown", command: null };
 };
 
 export const findPackageJsonFiles = async (dir, maxDepth = 5, currentDepth = 0) => {

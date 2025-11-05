@@ -79,6 +79,34 @@ export const updateProjectSize = async (projectPath, sizeInfo) => {
 };
 
 /**
+ * Save project last started timestamp
+ * @param {string} projectPath - Path to the project
+ * @param {string} timestamp - ISO timestamp string
+ * @returns {Promise<void>}
+ */
+export const saveProjectLastStarted = async (projectPath, timestamp) => {
+  try {
+    await fs.mkdir(CONFIG_DIR, { recursive: true });
+
+    let config = {};
+    try {
+      config = await loadConfig();
+    } catch (err) {
+    }
+
+    if (!config.projectLastStarted) {
+      config.projectLastStarted = {};
+    }
+
+    config.projectLastStarted[projectPath] = timestamp;
+
+    await fs.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
+  } catch (err) {
+    console.error(`Failed to save project last started: ${err.message}`);
+  }
+};
+
+/**
  * Check if node_modules sizes have been scanned before
  * @returns {Promise<boolean>}
  */

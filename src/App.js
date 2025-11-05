@@ -1,290 +1,131 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
+import clipboardy from 'clipboardy';
 import useConfig from './hooks/useConfig.js';
+import { useProjectScanner } from './hooks/useProjectScanner.js';
+import { useProjectNavigation } from './hooks/useProjectNavigation.js';
+import { useProcessMonitor } from './hooks/useProcessMonitor.js';
+import { useNodeModulesScanner } from './hooks/useNodeModulesScanner.js';
+import { useSearchMode } from './hooks/useSearchMode.js';
+import { useCloneMode } from './hooks/useCloneMode.js';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.js';
 import ConfigurationComponent from './components/configuration/configuration-component.js';
 import { findPackageJsonFiles } from './commands/project-scanner.js';
 import { executeCommandInTerminal } from './commands/run-command.js';
-import { getTerminalsInPath, killProcessesInPath } from './commands/process-monitor.js';
+import { killProcessesInPath } from './commands/process-monitor.js';
 import { useScreenSize } from "./hooks/useScreenSize.js";
 import { getNodeModulesSize } from './utils/folder-size.js';
-import { saveNodeModulesSizes } from './utils/config-manager.js';
+import { saveNodeModulesSizes, saveProjectLastStarted } from './utils/config-manager.js';
+import { validateProjectReadiness } from './utils/project-validator.js';
 import Project from './components/project.js';
-import ProjectDetails from './components/project-details.js';
 import SearchInput from './components/search/search-input.js';
 import CloneInput from './components/clone/clone-input.js';
-import { cloneRepository } from './commands/clone-repo.js';
+import CleanupConfirm from './components/cleanup/cleanup-confirm.js';
+import HelpScreen from './components/help-screen.js';
+import { deleteNodeModules, formatBytes } from './utils/node-modules-cleaner.js';
 
-const VERSION = "0.0.9"
+const VERSION = "0.0.11"
 const App = () => {
-  const { configuration, isConfig, loading, nodeModulesSizes: configSizes, reloadConfig } = useConfig();
-  const [projects, setProjects] = useState([]);
-  const [scanning, setScanning] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const [view, setView] = useState('list');
-  const [error, setError] = useState(null);
-  const [successMessage, setSuccessMessage] = useState(null);
+  const { configuration, isConfig, loading, nodeModulesSizes: configSizes, projectLastStarted, reloadConfig } = useConfig();
   const { exit } = useApp();
   const size = useScreenSize();
-  const [scrollOffset, setScrollOffset] = useState(0);
-  const [runningProcesses, setRunningProcesses] = useState({});
-  const [nodeModulesSizes, setNodeModulesSizes] = useState({});
-  const [searchMode, setSearchMode] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [cloneMode, setCloneMode] = useState(false);
-  const [cloning, setCloning] = useState(false);
-  const [autoRefreshMode, setAutoRefreshMode] = useState(false);
-  const [expectedRepoName, setExpectedRepoName] = useState(null);
-  const [scanningNodeModules, setScanningNodeModules] = useState(false);
-  const [scanProgress, setScanProgress] = useState({ current: 0, total: 0 });
 
+  // View and UI state
+  const [view, setView] = useState('list');
+  const [helpMode, setHelpMode] = useState(false);
+  const [cleanupMode, setCleanupMode] = useState(false);
+  const [staleProjects, setStaleProjects] = useState([]);
+  const [clipboardUrl, setClipboardUrl] = useState('');
+
+  // Custom hooks
+  const { projects, setProjects, scanning, setScanning, error, setError } = useProjectScanner(configuration, isConfig);
+  const { runningProcesses, setRunningProcesses, checkedProjects, isInitialScan } = useProcessMonitor(projects);
+  const { nodeModulesSizes, setNodeModulesSizes, scanAllNodeModules } = useNodeModulesScanner(projects, configSizes, reloadConfig);
+  const { checkDoubleTap } = useKeyboardShortcuts();
+
+  // Calculate visible items for display
   const reservedLines = 3 + 2 + 2 + 4 + 2;
-  const detailsLines = (view === 'details' && projects[selectedIndex]) ? 10 : 0;
-  const searchLines = searchMode ? 2 : 0;
-  const cloneLines = cloneMode ? 2 : 0;
   const scrollIndicatorLines = 2;
-  const availableLines = Math.max(5, size.height - reservedLines - detailsLines - searchLines - cloneLines - scrollIndicatorLines);
+  const availableLines = Math.max(5, size.height - reservedLines - scrollIndicatorLines);
   const VISIBLE_ITEMS = Math.max(5, availableLines);
 
-  const filteredProjects = searchQuery
-    ? projects.filter(project =>
-      project.projectName.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    : projects;
+  // Navigation and search hooks (need VISIBLE_ITEMS first)
+  const navigation = useProjectNavigation(projects, VISIBLE_ITEMS);
+  const { searchMode, searchQuery, filteredProjects, handleSearchSubmit, handleSearchCancel, clearSearch, openSearch } = useSearchMode(projects, navigation);
 
-  const scanAllNodeModules = useCallback(async () => {
-    if (scanningNodeModules || projects.length === 0) return;
+  // Callback for when clone auto-refresh finds the new project
+  const handleCloneRefresh = (sortedProjects, newProjectIndex) => {
+    setProjects(sortedProjects);
+    if (newProjectIndex !== -1) {
+      navigation.jumpToIndex(newProjectIndex);
+    }
+  };
 
-    console.log('Starting node_modules scan for', projects.length, 'projects');
-    setScanningNodeModules(true);
-    setScanProgress({ current: 0, total: projects.length });
-    setError(null);
+  // Helper function to validate if clipboard contains a git URL
+  const isValidGitUrl = (url) => {
+    if (!url || typeof url !== 'string') return false;
+    const trimmed = url.trim();
+    return (
+      trimmed.startsWith('https://') ||
+      trimmed.startsWith('git@') ||
+      trimmed.startsWith('git://') ||
+      trimmed.startsWith('ssh://')
+    );
+  };
 
-    const newSizes = {};
-
+  // Read clipboard and open clone mode with pre-filled URL if valid
+  const handleOpenCloneMode = async () => {
     try {
-      for (let i = 0; i < projects.length; i++) {
-        const project = projects[i];
-        const startTime = Date.now();
-
-        try {
-          const sizeInfo = await getNodeModulesSize(project.path);
-
-          newSizes[project.path] = {
-            ...sizeInfo,
-            scannedAt: new Date().toISOString()
-          };
-        } catch (err) {
-          newSizes[project.path] = {
-            exists: false,
-            sizeBytes: 0,
-            sizeFormatted: null,
-            scannedAt: new Date().toISOString(),
-            error: err.message
-          };
-        }
-
-        setScanProgress({ current: i + 1, total: projects.length });
-        setNodeModulesSizes({ ...newSizes });
-
-
-        const elapsed = Date.now() - startTime;
-        if (elapsed < 300) {
-          await new Promise(resolve => setTimeout(resolve, 300 - elapsed));
-        }
+      const clipboardContent = await clipboardy.read();
+      if (isValidGitUrl(clipboardContent)) {
+        setClipboardUrl(clipboardContent.trim());
+      } else {
+        setClipboardUrl('');
       }
-
-      console.log('Saving', Object.keys(newSizes).length, 'sizes to config');
-      await saveNodeModulesSizes(newSizes);
-      await reloadConfig();
-
-      setSuccessMessage(`✓ Scan complete! Updated sizes for ${projects.length} project${projects.length > 1 ? 's' : ''}.`);
     } catch (err) {
-      console.error('Scan error:', err);
-      setError(`Scan failed: ${err.message}`);
-      setTimeout(() => setError(null), 5000);
-    } finally {
-      setScanningNodeModules(false);
-      setScanProgress({ current: 0, total: 0 });
+      // Silently fail - user can still manually paste
+      setClipboardUrl('');
     }
-  }, [projects, scanningNodeModules, reloadConfig]);
+    openCloneMode();
+  };
 
-  useEffect(() => {
-    if (successMessage) {
-      const timer = setTimeout(() => {
-        setSuccessMessage(null);
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [successMessage]);
+  const { cloneMode, autoRefreshMode, handleCloneSubmit, handleCloneCancel, openCloneMode, cancelAutoRefresh } = useCloneMode(configuration, VISIBLE_ITEMS, handleCloneRefresh);
 
-  useEffect(() => {
-    if (isConfig && configuration?.projectPath) {
-      setScanning(true);
-      setError(null);
-      findPackageJsonFiles(configuration.projectPath)
-        .then((foundProjects) => {
-          const sortedProjects = foundProjects.sort((a, b) =>
-            a.projectName.localeCompare(b.projectName, undefined, { sensitivity: 'base' })
-          );
-          setProjects(sortedProjects);
-          if (sortedProjects.length === 0) {
-            setError('No projects found in the configured directory');
-          }
-        })
-        .catch((err) => {
-          setError(`Error scanning projects: ${err.message}`);
-        })
-        .finally(() => setScanning(false));
-    }
-  }, [isConfig, configuration]);
+  const { selectedIndex, scrollOffset } = navigation;
 
-  useEffect(() => {
-    if (searchQuery && filteredProjects.length > 0) {
-      setSelectedIndex(0);
-      setScrollOffset(0);
-    }
-  }, [searchQuery]);
-
-  useEffect(() => {
-    if (configSizes && Object.keys(configSizes).length > 0) {
-      setNodeModulesSizes(configSizes);
-    }
-  }, [configSizes]);
-
-  useEffect(() => {
-    if (projects.length === 0 || scanning || scanningNodeModules) return;
-
-    const hasSizes = configSizes && Object.keys(configSizes).length > 0;
-
-    if (!hasSizes && projects.length > 0) {
-      console.log('Auto-scanning node_modules on first load...', projects.length, 'projects');
-      scanAllNodeModules();
-    }
-  }, [projects, configSizes, scanning, scanningNodeModules, scanAllNodeModules]);
-
-  useEffect(() => {
-    if (projects.length === 0) return;
-
-    let currentIndex = 0;
-    let isActive = true;
-
-    const checkNextProject = async () => {
-      if (!isActive || projects.length === 0) return;
-
-      const project = projects[currentIndex];
-      try {
-        const terminals = await getTerminalsInPath(project.path);
-
-        if (terminals.length > 0 && isActive) {
-          setRunningProcesses(prev => ({
-            ...prev,
-            [project.path]: {
-              hasDevServer: terminals.some(t =>
-                t.command.includes('npm run dev') ||
-                t.command.includes('npm start') ||
-                t.command.includes('yarn dev') ||
-                t.command.includes('pnpm dev')
-              ),
-              hasEditor: terminals.some(t =>
-                t.command.includes('nvim') ||
-                t.command.includes('vim')
-              ),
-              count: terminals.length
-            }
-          }));
-        } else if (isActive) {
-          setRunningProcesses(prev => {
-            const newState = { ...prev };
-            delete newState[project.path];
-            return newState;
-          });
-        }
-      } catch (err) {
-      }
-
-      currentIndex = (currentIndex + 1) % projects.length;
-    };
-
-    const interval = setInterval(checkNextProject, 500);
-
-    checkNextProject();
-
-    return () => {
-      isActive = false;
-      clearInterval(interval);
-    };
-  }, [projects]);
-
-  useEffect(() => {
-    if (!autoRefreshMode || !expectedRepoName) return;
-
-    let refreshCount = 0;
-    const maxRefreshes = 12;
-
-    const refreshProjects = async () => {
-      refreshCount++;
-
-      try {
-        const foundProjects = await findPackageJsonFiles(configuration.projectPath);
-        const sortedProjects = foundProjects.sort((a, b) =>
-          a.projectName.localeCompare(b.projectName, undefined, { sensitivity: 'base' })
-        );
-
-        const newProjectIndex = sortedProjects.findIndex(p =>
-          p.projectName.toLowerCase() === expectedRepoName.toLowerCase()
-        );
-
-        if (newProjectIndex !== -1) {
-          setProjects(sortedProjects);
-          setSelectedIndex(newProjectIndex);
-          setScrollOffset(Math.max(0, newProjectIndex - Math.floor(VISIBLE_ITEMS / 2)));
-          setSuccessMessage(`✓ Successfully cloned ${expectedRepoName}`);
-          setAutoRefreshMode(false);
-          setExpectedRepoName(null);
-        } else if (refreshCount >= maxRefreshes) {
-          setAutoRefreshMode(false);
-          setExpectedRepoName(null);
-          setSuccessMessage(null);
-        } else {
-          setProjects(sortedProjects);
-        }
-      } catch (err) {
-      }
-    };
-
-    const interval = setInterval(refreshProjects, 10000);
-
-    const initialTimeout = setTimeout(refreshProjects, 5000);
-
-    return () => {
-      clearInterval(interval);
-      clearTimeout(initialTimeout);
-    };
-  }, [autoRefreshMode, expectedRepoName, configuration]);
+  // Wrapper to reset clipboard URL when cancelling clone
+  const handleCloneCancelWrapper = () => {
+    setClipboardUrl('');
+    handleCloneCancel();
+  };
 
   useInput((input, key) => {
     if (view === 'config') return;
     if (searchMode) return;
     if (cloneMode) return;
+    if (cleanupMode) return;
 
+    if (helpMode) {
+      setHelpMode(false);
+      return;
+    }
 
+    // Navigation
     if (key.upArrow || input === 'k') {
-      setSelectedIndex(prev => {
-        const newIndex = Math.max(0, prev - 1);
-        if (newIndex < scrollOffset) {
-          setScrollOffset(newIndex);
-        }
-        return newIndex;
-      });
+      navigation.navigateUp();
     }
     if (key.downArrow || input === 'j') {
-      setSelectedIndex(prev => {
-        const newIndex = Math.min(filteredProjects.length - 1, prev + 1);
-        if (newIndex >= scrollOffset + VISIBLE_ITEMS) {
-          setScrollOffset(newIndex - VISIBLE_ITEMS + 1);
-        }
-        return newIndex;
-      });
+      navigation.navigateDown();
+    }
+
+    if (input === 'g') {
+      if (checkDoubleTap('g', 300)) {
+        navigation.jumpToTop();
+      }
+    }
+
+    if (input === 'G') {
+      navigation.jumpToBottom();
     }
 
     if (key.return) {
@@ -305,31 +146,24 @@ const App = () => {
       }
     }
 
-    if (input === 'd') {
-      setView(view === 'details' ? 'list' : 'details');
+    if (input === 'c') {
+      handleOpenCloneMode();
     }
 
-    if (input === 'c') {
+    if (input === 'C') {
       setView('config');
     }
 
-    if (input === 'i') {
-      setSearchMode(true);
-    }
-
-    if (input === 'g') {
-      setCloneMode(true);
+    if (input === 'i' || input === '/') {
+      openSearch();
     }
 
     if (input === 'r') {
       setScanning(true);
-      setSelectedIndex(0);
-      setScrollOffset(0);
+      navigation.reset();
       setNodeModulesSizes({});
-      setSearchQuery('');
-      setSearchMode(false);
-      setAutoRefreshMode(false);
-      setExpectedRepoName(null);
+      clearSearch();
+      cancelAutoRefresh();
       findPackageJsonFiles(configuration.projectPath)
         .then((foundProjects) => {
           const sortedProjects = foundProjects.sort((a, b) =>
@@ -337,17 +171,28 @@ const App = () => {
           );
           setProjects(sortedProjects);
         })
-        .finally(() => setScanning(false));
+        .finally(() => {
+          setScanning(false);
+          scanAllNodeModules();
+        });
     }
 
     if (input === 'x' && autoRefreshMode) {
-      setAutoRefreshMode(false);
-      setExpectedRepoName(null);
-      setSuccessMessage(null);
+      cancelAutoRefresh();
     }
 
-    if (input === 'S') {
+    if (input === 'm' || input === 'S') {
       scanAllNodeModules();
+    }
+
+    if (input === 'I') {
+      if (filteredProjects[selectedIndex]) {
+        installDependencies(filteredProjects[selectedIndex]);
+      }
+    }
+
+    if (input === '?') {
+      setHelpMode(true);
     }
 
     if (input === 'q' || (key.ctrl && input === 'c')) {
@@ -355,34 +200,15 @@ const App = () => {
     }
   });
 
-  const handleSearchSubmit = (query) => {
-    setSearchQuery(query);
-    setSearchMode(false);
-  };
-
-  const handleSearchCancel = () => {
-    setSearchMode(false);
-  };
-
-  const handleCloneSubmit = async (url) => {
-    setCloneMode(false);
-    setCloning(true);
+  const handleCloneSubmitWrapper = async (url) => {
     setError(null);
+    setClipboardUrl(''); // Reset clipboard URL after submission
 
     try {
-      const result = await cloneRepository({
-        url,
-        destinationPath: configuration.projectPath
-      });
+      const result = await handleCloneSubmit(url);
 
-      if (result.interactive) {
-        setSuccessMessage(`✓ ${result.message}. Auto-refreshing to detect completion...`);
-        setCloning(false);
-        setExpectedRepoName(result.repoName);
-        setAutoRefreshMode(true);
-      } else {
-        setSuccessMessage(`✓ ${result.message}`);
-
+      if (result.type === 'success') {
+        // Non-interactive clone completed
         setScanning(true);
         setNodeModulesSizes({});
         findPackageJsonFiles(configuration.projectPath)
@@ -396,8 +222,7 @@ const App = () => {
               p.projectName.toLowerCase() === result.repoName.toLowerCase()
             );
             if (newProjectIndex !== -1) {
-              setSelectedIndex(newProjectIndex);
-              setScrollOffset(Math.max(0, newProjectIndex - Math.floor(VISIBLE_ITEMS / 2)));
+              navigation.jumpToIndex(newProjectIndex);
             }
           })
           .catch((err) => {
@@ -405,18 +230,55 @@ const App = () => {
           })
           .finally(() => {
             setScanning(false);
-            setCloning(false);
           });
       }
+      // Interactive clone is handled by the hook's auto-refresh
     } catch (err) {
       setError(`Clone failed: ${err.message}`);
-      setCloning(false);
       setTimeout(() => setError(null), 5000);
     }
   };
 
-  const handleCloneCancel = () => {
-    setCloneMode(false);
+  const handleCleanupConfirm = async () => {
+    if (staleProjects.length === 0) {
+      setCleanupMode(false);
+      return;
+    }
+
+    setCleanupMode(false);
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const project of staleProjects) {
+      const result = await deleteNodeModules(project.path);
+      if (result.success) {
+        successCount++;
+
+        setNodeModulesSizes(prev => ({
+          ...prev,
+          [project.path]: {
+            exists: false,
+            sizeBytes: 0,
+            sizeFormatted: null,
+            deletedAt: new Date().toISOString()
+          }
+        }));
+      } else {
+        failCount++;
+      }
+    }
+
+    await saveNodeModulesSizes(nodeModulesSizes);
+
+    if (failCount > 0) {
+      setError(`Cleaned ${successCount} of ${staleProjects.length} projects (${failCount} failed)`);
+      setTimeout(() => setError(null), 5000);
+    }
+  };
+
+  const handleCleanupCancel = () => {
+    setCleanupMode(false);
   };
 
   const openProject = async (project) => {
@@ -433,14 +295,26 @@ const App = () => {
 
   const runDevServer = async (project) => {
     try {
-      const devCommand = project.command !== 'N/A' ? project.command : 'npm run dev';
+      const validation = await validateProjectReadiness(project);
+
+      if (!validation.valid) {
+        const errorMessages = validation.errors.map(e => e.message).join(' ');
+        setError(errorMessages);
+        setTimeout(() => setError(null), 5000);
+        return;
+      }
+
+      const devCommand = project.command || 'npm run dev';
 
       await executeCommandInTerminal({
         command: devCommand,
         path: project.path
       });
+
+      await saveProjectLastStarted(project.path, new Date().toISOString());
     } catch (err) {
       setError(`Failed to run dev server: ${err.message}`);
+      setTimeout(() => setError(null), 5000);
       console.error('Error running dev server:', err);
     }
   };
@@ -458,7 +332,6 @@ const App = () => {
       const killedCount = await killProcessesInPath(project.path);
 
       if (killedCount > 0) {
-        setSuccessMessage(`✓ Stopped ${killedCount} process${killedCount > 1 ? 'es' : ''} for ${project.projectName}`);
         setError(null);
         setRunningProcesses(prev => {
           const newState = { ...prev };
@@ -476,12 +349,50 @@ const App = () => {
     }
   };
 
+  const installDependencies = async (project) => {
+    try {
+      setError(null);
+
+      await executeCommandInTerminal({
+        command: 'npm install && echo "\\n✓ Installation complete! Press Enter to close..." && read',
+        path: project.path
+      });
+
+      setTimeout(async () => {
+        try {
+          const sizeInfo = await getNodeModulesSize(project.path);
+          setNodeModulesSizes(prev => ({
+            ...prev,
+            [project.path]: {
+              ...sizeInfo,
+              scannedAt: new Date().toISOString()
+            }
+          }));
+
+          await saveNodeModulesSizes({
+            ...nodeModulesSizes,
+            [project.path]: {
+              ...sizeInfo,
+              scannedAt: new Date().toISOString()
+            }
+          });
+        } catch (err) {
+          console.error('Error updating node_modules size:', err);
+        }
+      }, 3000);
+
+    } catch (err) {
+      setError(`Failed to install dependencies: ${err.message}`);
+      setTimeout(() => setError(null), 5000);
+      console.error('Error installing dependencies:', err);
+    }
+  };
+
   const handleConfigComplete = (newConfig) => {
     setView('list');
     setScanning(true);
     setNodeModulesSizes({});
-    setSearchQuery('');
-    setSearchMode(false);
+    clearSearch();
     findPackageJsonFiles(newConfig.projectPath)
       .then((foundProjects) => {
         const sortedProjects = foundProjects.sort((a, b) =>
@@ -532,7 +443,7 @@ const App = () => {
     );
   }
 
-  if (error) {
+  if (error && projects.length === 0) {
     return (
       <>
         <Box>
@@ -542,15 +453,13 @@ const App = () => {
           <Text color="red">✗ {error}</Text>
           <Box marginTop={1}>
             <Text color="gray">
-              Press <Text bold>c</Text> to reconfigure or <Text bold>q</Text> to quit
+              Press <Text bold>C</Text> to reconfigure or <Text bold>q</Text> to quit
             </Text>
           </Box>
         </Box>
       </>
     );
   }
-
-  const selectedProject = filteredProjects[selectedIndex];
 
   return (
     <>
@@ -572,6 +481,14 @@ const App = () => {
             </Box>
           </Box>
 
+          {isInitialScan && projects.length > 0 && (
+            <Box marginBottom={1}>
+              <Text color="yellow">
+                ◐ Checking process status... ({checkedProjects.size}/{projects.length})
+              </Text>
+            </Box>
+          )}
+
           {searchMode && (
             <SearchInput
               onSubmit={handleSearchSubmit}
@@ -582,30 +499,29 @@ const App = () => {
 
           {cloneMode && (
             <CloneInput
-              onSubmit={handleCloneSubmit}
-              onCancel={handleCloneCancel}
+              onSubmit={handleCloneSubmitWrapper}
+              onCancel={handleCloneCancelWrapper}
+              initialValue={clipboardUrl}
             />
           )}
 
-          {cloning && (
-            <Box marginBottom={1}>
-              <Text color="yellow">⏳ Cloning repository...</Text>
-            </Box>
+          {cleanupMode && (
+            <CleanupConfirm
+              staleProjects={staleProjects.map(p => ({
+                ...p,
+                sizeFormatted: nodeModulesSizes[p.path]?.sizeFormatted || '0 MB',
+                sizeBytes: nodeModulesSizes[p.path]?.sizeBytes || 0,
+                lastStarted: projectLastStarted[p.path]
+              }))}
+              totalSize={formatBytes(
+                staleProjects.reduce((sum, p) => sum + (nodeModulesSizes[p.path]?.sizeBytes || 0), 0)
+              )}
+              onConfirm={handleCleanupConfirm}
+              onCancel={handleCleanupCancel}
+            />
           )}
 
-          {autoRefreshMode && expectedRepoName && (
-            <Box marginBottom={1}>
-              <Text color="cyan">🔄 Watching for {expectedRepoName}... (auto-refreshing every 10s, press x to cancel)</Text>
-            </Box>
-          )}
-
-          {scanningNodeModules && (
-            <Box marginBottom={1}>
-              <Text color="yellow">
-                📊 Scanning node_modules... ({scanProgress.current}/{scanProgress.total})
-              </Text>
-            </Box>
-          )}
+          {helpMode && <HelpScreen />}
 
           {searchQuery && !searchMode && (
             <Box marginBottom={1}>
@@ -617,9 +533,9 @@ const App = () => {
             </Box>
           )}
 
-          {successMessage && (
+          {error && (
             <Box marginBottom={1}>
-              <Text color="green">{successMessage}</Text>
+              <Text color="red">✗ {error}</Text>
             </Box>
           )}
 
@@ -643,6 +559,7 @@ const App = () => {
                 runningProcesses={runningProcesses}
                 nodeModulesSizes={nodeModulesSizes}
                 scrollOffset={scrollOffset}
+                checkedProjects={checkedProjects}
               />)}
 
               {scrollOffset + VISIBLE_ITEMS < filteredProjects.length && (
@@ -656,13 +573,11 @@ const App = () => {
           )}
         </Box>
 
-        {view === 'details' && selectedProject && <ProjectDetails selectedProject={selectedProject} nodeModulesSizes={nodeModulesSizes} />}
-
         <Box
           flexDirection="column"
         >
           <Text color="gray">
-            ↑/↓ or j/k: Navigate | Enter: nvim | s: toggle server | d: Toggle details | i: Filter | g: Clone repo | S: Scan sizes | r: Refresh | c: Configure | q: Quit
+            j/k: Navigate | gg/G: Jump top/bottom | Enter: nvim | s: Server | /: Search | dd: Cleanup | c: Clone | I: Install | m: Scan | r: Refresh | C: Config | ?: Help | q: Quit
           </Text>
         </Box>
       </Box>

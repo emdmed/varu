@@ -6,12 +6,19 @@ import { getTerminalsInPath } from '../commands/process-monitor.js';
  */
 export const useProcessMonitor = (projects) => {
   const [runningProcesses, setRunningProcesses] = useState({});
+  const [checkedProjects, setCheckedProjects] = useState(new Set());
+  const [isInitialScan, setIsInitialScan] = useState(true);
 
   useEffect(() => {
     if (projects.length === 0) return;
 
+    // Reset state for new project list
+    setCheckedProjects(new Set());
+    setIsInitialScan(true);
+
     let currentIndex = 0;
     let isActive = true;
+    const checked = new Set();
 
     const checkNextProject = async () => {
       if (!isActive || projects.length === 0) return;
@@ -48,6 +55,15 @@ export const useProcessMonitor = (projects) => {
         // Silently fail for individual project checks
       }
 
+      // Mark this project as checked
+      checked.add(project.path);
+      setCheckedProjects(new Set(checked));
+
+      // Check if initial scan is complete
+      if (checked.size === projects.length && isInitialScan) {
+        setIsInitialScan(false);
+      }
+
       currentIndex = (currentIndex + 1) % projects.length;
     };
 
@@ -62,6 +78,8 @@ export const useProcessMonitor = (projects) => {
 
   return {
     runningProcesses,
-    setRunningProcesses
+    setRunningProcesses,
+    checkedProjects,
+    isInitialScan
   };
 };

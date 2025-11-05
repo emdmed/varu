@@ -24,7 +24,7 @@ import CleanupConfirm from './components/cleanup/cleanup-confirm.js';
 import HelpScreen from './components/help-screen.js';
 import { deleteNodeModules, formatBytes } from './utils/node-modules-cleaner.js';
 
-const VERSION = "0.0.9"
+const VERSION = "0.0.11"
 const App = () => {
   const { configuration, isConfig, loading, nodeModulesSizes: configSizes, projectLastStarted, reloadConfig } = useConfig();
   const { exit } = useApp();
@@ -39,7 +39,7 @@ const App = () => {
 
   // Custom hooks
   const { projects, setProjects, scanning, setScanning, error, setError } = useProjectScanner(configuration, isConfig);
-  const { runningProcesses, setRunningProcesses } = useProcessMonitor(projects);
+  const { runningProcesses, setRunningProcesses, checkedProjects, isInitialScan } = useProcessMonitor(projects);
   const { nodeModulesSizes, setNodeModulesSizes, scanAllNodeModules } = useNodeModulesScanner(projects, configSizes, reloadConfig);
   const { checkDoubleTap } = useKeyboardShortcuts();
 
@@ -481,6 +481,14 @@ const App = () => {
             </Box>
           </Box>
 
+          {isInitialScan && projects.length > 0 && (
+            <Box marginBottom={1}>
+              <Text color="yellow">
+                ◐ Checking process status... ({checkedProjects.size}/{projects.length})
+              </Text>
+            </Box>
+          )}
+
           {searchMode && (
             <SearchInput
               onSubmit={handleSearchSubmit}
@@ -551,6 +559,7 @@ const App = () => {
                 runningProcesses={runningProcesses}
                 nodeModulesSizes={nodeModulesSizes}
                 scrollOffset={scrollOffset}
+                checkedProjects={checkedProjects}
               />)}
 
               {scrollOffset + VISIBLE_ITEMS < filteredProjects.length && (

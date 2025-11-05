@@ -39,7 +39,7 @@ const App = () => {
   const { projects, setProjects, scanning, setScanning, error, setError } = useProjectScanner(configuration, isConfig);
   const { runningProcesses, setRunningProcesses } = useProcessMonitor(projects);
   const { nodeModulesSizes, setNodeModulesSizes, scanAllNodeModules } = useNodeModulesScanner(projects, configSizes, reloadConfig);
-  const { checkDoubleTap, lastKey, setLastKey, lastKeyTime, setLastKeyTime } = useKeyboardShortcuts();
+  const { checkDoubleTap } = useKeyboardShortcuts();
 
   // Calculate visible items for display
   const reservedLines = 3 + 2 + 2 + 4 + 2;
@@ -83,17 +83,9 @@ const App = () => {
     }
 
     if (input === 'g') {
-      if (checkDoubleTap('g')) {
+      if (checkDoubleTap('g', 300)) {
         navigation.jumpToTop();
-        return;
       }
-      setTimeout(() => {
-        if (lastKey === 'g') {
-          openCloneMode();
-          setLastKey(null);
-          setLastKeyTime(0);
-        }
-      }, 500);
     }
 
     if (input === 'G') {
@@ -119,6 +111,10 @@ const App = () => {
     }
 
     if (input === 'c') {
+      openCloneMode();
+    }
+
+    if (input === 'C') {
       setView('config');
     }
 
@@ -420,7 +416,7 @@ const App = () => {
           <Text color="red">✗ {error}</Text>
           <Box marginTop={1}>
             <Text color="gray">
-              Press <Text bold>c</Text> to reconfigure or <Text bold>q</Text> to quit
+              Press <Text bold>C</Text> to reconfigure or <Text bold>q</Text> to quit
             </Text>
           </Box>
         </Box>
@@ -534,7 +530,7 @@ const App = () => {
           flexDirection="column"
         >
           <Text color="gray">
-            j/k: Navigate | gg/G: Jump top/bottom | Enter: nvim | s: Server | /: Search | dd: Cleanup | g: Clone | I: Install | m: Scan | r: Refresh | c: Config | ?: Help | q: Quit
+            j/k: Navigate | gg/G: Jump top/bottom | Enter: nvim | s: Server | /: Search | dd: Cleanup | c: Clone | I: Install | m: Scan | r: Refresh | C: Config | ?: Help | q: Quit
           </Text>
         </Box>
       </Box>

@@ -28,8 +28,7 @@ const HelpScreen = () => {
         <Text dimColor/>
 
         <Text bold color="yellow">Repository:</Text>
-        <Text>  g           - Clone git repository (wait 500ms)</Text>
-        <Text>  gg          - Jump to top (press g twice)</Text>
+        <Text>  c           - Clone git repository</Text>
         <Text>  r           - Refresh project list</Text>
         <Text dimColor/>
 
@@ -39,7 +38,7 @@ const HelpScreen = () => {
         <Text dimColor/>
 
         <Text bold color="yellow">System:</Text>
-        <Text>  c           - Configuration settings</Text>
+        <Text>  C           - Configuration settings</Text>
         <Text>  ?           - Show this help screen</Text>
         <Text>  q or Ctrl+C - Quit application</Text>
       </Box>

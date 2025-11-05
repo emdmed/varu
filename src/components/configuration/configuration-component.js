@@ -146,7 +146,6 @@ const ConfigurationComponent = ({ onComplete }) => {
     }
   });
 
-  // Helper to get path validation indicator
   const getPathIndicator = () => {
     if (isValidating) {
       return <Text color="yellow">⏳ Validating...</Text>;
@@ -193,7 +192,6 @@ const ConfigurationComponent = ({ onComplete }) => {
             </Box>
           </Box>
 
-          {/* Path validation status */}
           {getPathIndicator() && (
             <Box marginBottom={1} paddingLeft={1}>
               {getPathIndicator()}

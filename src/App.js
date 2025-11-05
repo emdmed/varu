@@ -481,14 +481,6 @@ const App = () => {
             </Box>
           </Box>
 
-          {isInitialScan && projects.length > 0 && (
-            <Box marginBottom={1}>
-              <Text color="yellow">
-                ◐ Checking process status... ({checkedProjects.size}/{projects.length})
-              </Text>
-            </Box>
-          )}
-
           {searchMode && (
             <SearchInput
               onSubmit={handleSearchSubmit}

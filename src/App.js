@@ -48,9 +48,13 @@ const App = () => {
   const { checkDoubleTap } = useKeyboardShortcuts();
 
   // Calculate visible items for display
-  const reservedLines = 3 + 2 + 2 + 4 + 2;
-  const scrollIndicatorLines = 2;
-  const availableLines = Math.max(5, size.height - reservedLines - scrollIndicatorLines);
+  // Header (1) + footer (2) + padding (2) + error/search bars (dynamic)
+  const headerLines = 1; // Project count line
+  const footerLines = 2; // Port display + keybindings/help text
+  const paddingLines = 2; // Top and bottom padding
+  const scrollIndicatorLines = 2; // Up/down scroll indicators
+  const reservedLines = headerLines + footerLines + paddingLines + scrollIndicatorLines;
+  const availableLines = Math.max(5, size.height - reservedLines);
   const VISIBLE_ITEMS = Math.max(5, availableLines);
 
   // Navigation and search hooks (need VISIBLE_ITEMS first)

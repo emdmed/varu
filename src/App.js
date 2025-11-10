@@ -614,7 +614,7 @@ const App = () => {
               </Text>
             </Box>
           ) : (
-            <Box>
+            <Box justifyContent='flex-end'>
               <Text dimColor>h for help</Text>
             </Box>
           )}

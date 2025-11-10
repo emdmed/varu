@@ -57,7 +57,7 @@ const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeMod
       </Box>
       <Box gap={1}>
         {hasEditor && (
-          <Text inverse={isSelected} color={lime}>[vim]</Text>
+          <Text inverse={isSelected} dimColor color={green}>[vim]</Text>
         )}
         {shouldShowDeps(modulesInfo) && (
           <Text inverse={isSelected} color={violet}>deps {formatSize(modulesInfo.sizeFormatted)}</Text>

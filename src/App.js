@@ -9,6 +9,7 @@ import { useNodeModulesScanner } from './hooks/useNodeModulesScanner.js';
 import { useSearchMode } from './hooks/useSearchMode.js';
 import { useCloneMode } from './hooks/useCloneMode.js';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.js';
+import { usePortMonitor } from './hooks/usePortMonitor.js';
 import ConfigurationComponent from './components/configuration/configuration-component.js';
 import { findPackageJsonFiles } from './commands/project-scanner.js';
 import { executeCommandInTerminal } from './commands/run-command.js';
@@ -22,7 +23,8 @@ import SearchInput from './components/search/search-input.js';
 import CloneInput from './components/clone/clone-input.js';
 import CleanupConfirm from './components/cleanup/cleanup-confirm.js';
 import HelpScreen from './components/help-screen.js';
-import { deleteNodeModules, formatBytes } from './utils/node-modules-cleaner.js';
+import PortsSection from './components/ports-section.js';
+import { deleteNodeModules, formatBytes, getStaleProjects } from './utils/node-modules-cleaner.js';
 import { colors } from './utils/colors.js';
 
 const VERSION = "0.0.11"
@@ -34,6 +36,7 @@ const App = () => {
   // View and UI state
   const [view, setView] = useState('list');
   const [helpMode, setHelpMode] = useState(false);
+  const [showKeybindings, setShowKeybindings] = useState(false);
   const [cleanupMode, setCleanupMode] = useState(false);
   const [staleProjects, setStaleProjects] = useState([]);
   const [clipboardUrl, setClipboardUrl] = useState('');
@@ -42,6 +45,7 @@ const App = () => {
   const { projects, setProjects, scanning, setScanning, error, setError } = useProjectScanner(configuration, isConfig);
   const { runningProcesses, setRunningProcesses, checkedProjects, isInitialScan } = useProcessMonitor(projects);
   const { nodeModulesSizes, setNodeModulesSizes, scanAllNodeModules } = useNodeModulesScanner(projects, configSizes, reloadConfig);
+  const { usedPorts } = usePortMonitor();
   const { checkDoubleTap } = useKeyboardShortcuts();
 
   // Calculate visible items for display
@@ -131,6 +135,14 @@ const App = () => {
       navigation.jumpToBottom();
     }
 
+    if (input === 'd') {
+      if (checkDoubleTap('d', 300)) {
+        const stale = getStaleProjects(projects, nodeModulesSizes, projectLastStarted, runningProcesses);
+        setStaleProjects(stale);
+        setCleanupMode(true);
+      }
+    }
+
     if (key.return) {
       if (filteredProjects[selectedIndex]) {
         openProject(filteredProjects[selectedIndex]);
@@ -202,6 +214,10 @@ const App = () => {
     }
 
     if (input === '?') {
+      setShowKeybindings(prev => !prev);
+    }
+
+    if (input === 'h') {
       setHelpMode(true);
     }
 
@@ -476,10 +492,9 @@ const App = () => {
       <Box>
         <Text>{'\x1Bc'}</Text>
       </Box>
-      <Box flexDirection="column" height={size.height} width={size.width} padding={1}>
+      <Box flexDirection="column" height={size.height} width={size.width} padding={1} justifyContent="space-between">
 
-
-        <Box flexDirection="column" marginBottom={1}>
+        <Box flexDirection="column" flexShrink={0}>
 
           <Box flexDirection='row' justifyContent='space-between' marginBottom={1}>
             <Text bold underline color={green}>
@@ -543,6 +558,8 @@ const App = () => {
             </Box>
           )}
 
+          <PortsSection usedPorts={usedPorts} projects={projects} runningProcesses={runningProcesses} />
+
           {filteredProjects.length === 0 ? (
             <Text color={green}>
               {searchQuery ? `No projects match "${searchQuery}"` : 'No projects found'}
@@ -577,13 +594,17 @@ const App = () => {
           )}
         </Box>
 
-        <Box
-          flexDirection="column"
-        >
-          <Text color="gray">
-            j/k: Navigate | gg/G: Jump top/bottom | Enter: nvim | s: Server | /: Search | dd: Cleanup | c: Clone | I: Install | m: Scan | r: Refresh | C: Config | ?: Help | q: Quit
-          </Text>
-        </Box>
+        {showKeybindings ? (
+          <Box flexDirection="column" flexShrink={0}>
+            <Text color="gray">
+              j/k: Navigate | gg/G: Jump top/bottom | Enter: nvim | s: Server | /: Search | dd: Cleanup | c: Clone | I: Install | m: Scan | r: Refresh | C: Config | h: Help | ?: Toggle Keys | q: Quit
+            </Text>
+          </Box>
+        ) : (
+          <Box flexDirection="column" flexShrink={0}>
+            <Text dimColor>h for help</Text>
+          </Box>
+        )}
       </Box>
     </>
   );

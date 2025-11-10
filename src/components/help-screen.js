@@ -39,7 +39,8 @@ const HelpScreen = () => {
 
         <Text bold color="yellow">System:</Text>
         <Text>  C           - Configuration settings</Text>
-        <Text>  ?           - Show this help screen</Text>
+        <Text>  h           - Show this help screen</Text>
+        <Text>  ?           - Toggle keybindings bar</Text>
         <Text>  q or Ctrl+C - Quit application</Text>
       </Box>
 

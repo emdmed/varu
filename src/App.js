@@ -26,7 +26,8 @@ import HelpScreen from './components/help-screen.js';
 import { deleteNodeModules, formatBytes, getStaleProjects } from './utils/node-modules-cleaner.js';
 import { colors } from './utils/colors.js';
 
-const VERSION = "0.0.11"
+const VERSION = "0.0.12"
+
 const App = () => {
   const { configuration, isConfig, loading, nodeModulesSizes: configSizes, projectLastStarted, reloadConfig } = useConfig();
   const { exit } = useApp();

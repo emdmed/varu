@@ -83,13 +83,109 @@ export async function getUsedPorts() {
         }
 
         const allPorts = extractUsedPorts(stdout, platform);
-        // Filter for ports > 3000 and remove duplicates
-        const filteredPorts = [...new Set(allPorts.filter(port => port > 3000))];
+        // Filter for ports >= 3000 and remove duplicates
+        const filteredPorts = [...new Set(allPorts.filter(port => port >= 3000))];
 
         return filteredPorts.sort((a, b) => a - b);
     } catch (error) {
         // Log to stderr so it appears in terminal
         console.error('Port scanner error:', error.message);
         return [];
+    }
+}
+
+/**
+ * Get port to PID mappings for accurate project matching
+ * Returns object like { 3000: 12345, 5173: 67890 }
+ */
+export async function getPortToPidMap() {
+    try {
+        const platform = process.platform;
+        let command = '';
+
+        if (platform === 'win32') {
+            command = 'netstat -ano';
+        } else if (platform === 'linux') {
+            // Use ss first as it's more comprehensive, fallback to lsof
+            command = 'ss -tlnp 2>/dev/null || lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null';
+        } else if (platform === 'darwin') {
+            command = 'lsof -nP -iTCP -sTCP:LISTEN';
+        } else {
+            throw new Error('Unsupported platform');
+        }
+
+        const { stdout } = await execAsync(command);
+        const portToPid = {};
+        const lines = stdout.split(/\r?\n/);
+
+        if (platform === 'linux' || platform === 'darwin') {
+            // Detect format: ss vs lsof
+            const isSsFormat = lines[0] && lines[0].includes('State');
+
+            for (const line of lines) {
+                if (!line.includes('LISTEN')) continue;
+
+                if (isSsFormat) {
+                    // ss output format: LISTEN 0      511                *:3000             *:*    users:(("next-server (v1",pid=3023983,fd=24))
+                    const tokens = line.trim().split(/\s+/);
+                    if (tokens.length < 4) continue;
+
+                    // Local address is 4th token (index 3) (e.g., "*:3000" or "[::1]:5173")
+                    const localAddress = tokens[3];
+                    const portMatch = localAddress.match(/:(\d+)$/);
+
+                    if (portMatch) {
+                        const port = Number(portMatch[1]);
+
+                        // Extract PID from users field: users:(("process",pid=12345,fd=24))
+                        const pidMatch = line.match(/pid=(\d+)/);
+                        if (pidMatch && port >= 3000) {
+                            portToPid[port] = Number(pidMatch[1]);
+                        }
+                    }
+                } else {
+                    // lsof output format: node    12345 user   21u  IPv4 123456      0t0  TCP *:3000 (LISTEN)
+                    const tokens = line.trim().split(/\s+/);
+                    if (tokens.length < 2) continue;
+
+                    // PID is the second column
+                    const pid = tokens[1];
+                    if (!/^\d+$/.test(pid)) continue;
+
+                    // Port is in a column like "*:3000" or "127.0.0.1:3000"
+                    const portMatch = line.match(/:(\d+)\s+\(LISTEN\)/);
+                    if (portMatch) {
+                        const port = Number(portMatch[1]);
+                        if (port >= 3000) {
+                            portToPid[port] = Number(pid);
+                        }
+                    }
+                }
+            }
+        } else if (platform === 'win32') {
+            // Windows netstat format: TCP    127.0.0.1:3000    0.0.0.0:0    LISTENING    12345
+            for (const line of lines) {
+                if (!line.includes('LISTENING')) continue;
+
+                const tokens = line.trim().split(/\s+/);
+                if (tokens.length < 5) continue;
+
+                const localAddress = tokens[1];
+                const pid = tokens[tokens.length - 1];
+
+                const portMatch = localAddress.match(/:(\d+)$/);
+                if (portMatch && /^\d+$/.test(pid)) {
+                    const port = Number(portMatch[1]);
+                    if (port >= 3000) {
+                        portToPid[port] = Number(pid);
+                    }
+                }
+            }
+        }
+
+        return portToPid;
+    } catch (error) {
+        console.error('Port-to-PID mapping error:', error.message);
+        return {};
     }
 }

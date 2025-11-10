@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { getUsedPorts } from '../utils/port-scanner.js';
+import { getPortToPidMap } from '../utils/port-scanner.js';
 
 /**
- * Custom hook to monitor used ports
+ * Custom hook to monitor used ports with PID mappings
  */
 export const usePortMonitor = () => {
-  const [usedPorts, setUsedPorts] = useState([]);
+  const [portToPidMap, setPortToPidMap] = useState({});
   const [isScanning, setIsScanning] = useState(false);
 
   useEffect(() => {
@@ -16,9 +16,9 @@ export const usePortMonitor = () => {
 
       setIsScanning(true);
       try {
-        const ports = await getUsedPorts();
+        const portMap = await getPortToPidMap();
         if (isMounted) {
-          setUsedPorts(ports);
+          setPortToPidMap(portMap);
         }
       } catch (error) {
         console.error('Error in port monitoring:', error);
@@ -42,7 +42,7 @@ export const usePortMonitor = () => {
   }, []);
 
   return {
-    usedPorts,
+    portToPidMap,
     isScanning
   };
 };

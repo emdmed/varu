@@ -41,7 +41,8 @@ export const useProcessMonitor = (projects) => {
                 t.command.includes('nvim') ||
                 t.command.includes('vim')
               ),
-              count: terminals.length
+              count: terminals.length,
+              pids: terminals.map(t => Number(t.pid))
             }
           }));
         } else if (isActive) {

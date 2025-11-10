@@ -18,7 +18,7 @@ const formatSize = (sizeFormatted) => {
   return sizeFormatted ? sizeFormatted.replace(/\s+/g, '') : '';
 };
 
-const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeModulesSizes, project, checkedProjects }) => {
+const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeModulesSizes, project, checkedProjects, portToPidMap }) => {
   const actualIndex = scrollOffset + index;
   const isSelected = actualIndex === selectedIndex;
   const processInfo = runningProcesses[project.path];
@@ -26,7 +26,25 @@ const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeMod
   const isRunning = processInfo && processInfo.hasDevServer
   const hasEditor = processInfo && processInfo.hasEditor
   const isChecked = checkedProjects?.has(project.path) ?? false;
-  const { amber, green, lime, violet } = colors
+  const { amber, green, lime, violet, cyan } = colors
+
+  // Find port by matching PIDs
+  const getProjectPort = () => {
+    if (!isRunning || !processInfo || !processInfo.pids || !portToPidMap) return null;
+
+    const projectPids = processInfo.pids;
+
+    // Find port whose PID matches one of this project's PIDs
+    for (const [port, pid] of Object.entries(portToPidMap)) {
+      if (projectPids.includes(Number(pid))) {
+        return Number(port);
+      }
+    }
+
+    return null;
+  };
+
+  const projectPort = getProjectPort();
 
   const getStatusIcon = () => {
     if (!isChecked) return '◐';
@@ -56,6 +74,9 @@ const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeMod
         )}
       </Box>
       <Box gap={1}>
+        {projectPort && (
+          <Text inverse={isSelected} color={green}>{projectPort}</Text>
+        )}
         {hasEditor && (
           <Text inverse={isSelected} dimColor color={green}>[vim]</Text>
         )}

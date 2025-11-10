@@ -23,7 +23,6 @@ import SearchInput from './components/search/search-input.js';
 import CloneInput from './components/clone/clone-input.js';
 import CleanupConfirm from './components/cleanup/cleanup-confirm.js';
 import HelpScreen from './components/help-screen.js';
-import PortsSection from './components/ports-section.js';
 import { deleteNodeModules, formatBytes, getStaleProjects } from './utils/node-modules-cleaner.js';
 import { colors } from './utils/colors.js';
 
@@ -45,7 +44,7 @@ const App = () => {
   const { projects, setProjects, scanning, setScanning, error, setError } = useProjectScanner(configuration, isConfig);
   const { runningProcesses, setRunningProcesses, checkedProjects, isInitialScan } = useProcessMonitor(projects);
   const { nodeModulesSizes, setNodeModulesSizes, scanAllNodeModules } = useNodeModulesScanner(projects, configSizes, reloadConfig);
-  const { usedPorts } = usePortMonitor();
+  const { portToPidMap } = usePortMonitor();
   const { checkDoubleTap } = useKeyboardShortcuts();
 
   // Calculate visible items for display
@@ -558,8 +557,6 @@ const App = () => {
             </Box>
           )}
 
-          <PortsSection usedPorts={usedPorts} projects={projects} runningProcesses={runningProcesses} />
-
           {filteredProjects.length === 0 ? (
             <Text color={green}>
               {searchQuery ? `No projects match "${searchQuery}"` : 'No projects found'}
@@ -581,6 +578,7 @@ const App = () => {
                 nodeModulesSizes={nodeModulesSizes}
                 scrollOffset={scrollOffset}
                 checkedProjects={checkedProjects}
+                portToPidMap={portToPidMap}
               />)}
 
               {scrollOffset + VISIBLE_ITEMS < filteredProjects.length && (
@@ -594,17 +592,33 @@ const App = () => {
           )}
         </Box>
 
-        {showKeybindings ? (
-          <Box flexDirection="column" flexShrink={0}>
-            <Text color="gray">
-              j/k: Navigate | gg/G: Jump top/bottom | Enter: nvim | s: Server | /: Search | dd: Cleanup | c: Clone | I: Install | m: Scan | r: Refresh | C: Config | h: Help | ?: Toggle Keys | q: Quit
-            </Text>
-          </Box>
-        ) : (
-          <Box flexDirection="column" flexShrink={0}>
-            <Text dimColor>h for help</Text>
-          </Box>
-        )}
+        <Box flexDirection="column" flexShrink={0}>
+          {Object.keys(portToPidMap).length > 0 && (
+            <Box marginBottom={0}>
+              <Text dimColor color={green}>Ports: </Text>
+              <Text color={green}>
+                {Object.keys(portToPidMap).sort((a, b) => Number(a) - Number(b)).map((port, idx) => (
+                  <Text key={port}>
+                    {idx > 0 && ' • '}
+                    {port}
+                  </Text>
+                ))}
+              </Text>
+            </Box>
+          )}
+
+          {showKeybindings ? (
+            <Box>
+              <Text color="gray">
+                j/k: Navigate | gg/G: Jump top/bottom | Enter: nvim | s: Server | /: Search | dd: Cleanup | c: Clone | I: Install | m: Scan | r: Refresh | C: Config | h: Help | ?: Toggle Keys | q: Quit
+              </Text>
+            </Box>
+          ) : (
+            <Box>
+              <Text dimColor>h for help</Text>
+            </Box>
+          )}
+        </Box>
       </Box>
     </>
   );

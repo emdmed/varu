@@ -1,6 +1,7 @@
 import React from "react"
 import { Box, Text } from "ink";
 import Spinner from "ink-spinner";
+import { colors } from "../utils/colors";
 
 const shouldShowDeps = (modulesInfo) => {
   if (!modulesInfo || !modulesInfo.exists) return false;
@@ -25,6 +26,7 @@ const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeMod
   const isRunning = processInfo && processInfo.hasDevServer
   const hasEditor = processInfo && processInfo.hasEditor
   const isChecked = checkedProjects?.has(project.path) ?? false;
+  const { amber, green, lime, violet } = colors
 
   const getStatusIcon = () => {
     if (!isChecked) return '◐';
@@ -34,7 +36,7 @@ const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeMod
   };
 
   const borderStyle = isSelected ? "" : ""
-  const borderColor = isSelected ? undefined : "gray"
+  const borderColor = isSelected ? undefined : green
 
   return (
     <Box
@@ -44,24 +46,24 @@ const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeMod
       key={actualIndex}
     >
       <Box gap={1}>
-        <Text inverse={isSelected || isRunning} bold={isRunning} color="green" >
+        <Text inverse={isSelected || isRunning} bold={isRunning} color={green} >
           {isSelected ? "▶ " : "  "}{getStatusIcon()}{" "}{project.projectName}{" "}
         </Text>
         {project.framework && (
-          <Text bold={isSelected} color="green" dimColor>
+          <Text bold={isSelected} color={green} dimColor>
             ({project.framework})
           </Text>
         )}
       </Box>
       <Box gap={1}>
         {hasEditor && (
-          <Text bold={isSelected} color="cyan">[vim]</Text>
+          <Text inverse={isSelected} color={lime}>[vim]</Text>
         )}
         {shouldShowDeps(modulesInfo) && (
-          <Text bold={isSelected} color="magenta">deps {formatSize(modulesInfo.sizeFormatted)}</Text>
+          <Text inverse={isSelected} color={violet}>deps {formatSize(modulesInfo.sizeFormatted)}</Text>
         )}
-        {modulesInfo === undefined && <Text color="magenta">deps <Spinner /></Text>}
-        <Text bold={isSelected} color={project.gitBranch ? "yellow" : "gray"}>[{getBranchDisplay(project.gitBranch)}]</Text>
+        {modulesInfo === undefined && <Text color={violet}>deps <Spinner /></Text>}
+        <Text inverse={isSelected} color={amber}>[{getBranchDisplay(project.gitBranch)}]</Text>
       </Box>
     </Box>
   )

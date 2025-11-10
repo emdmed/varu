@@ -23,6 +23,7 @@ import CloneInput from './components/clone/clone-input.js';
 import CleanupConfirm from './components/cleanup/cleanup-confirm.js';
 import HelpScreen from './components/help-screen.js';
 import { deleteNodeModules, formatBytes } from './utils/node-modules-cleaner.js';
+import { colors } from './utils/colors.js';
 
 const VERSION = "0.0.11"
 const App = () => {
@@ -60,6 +61,8 @@ const App = () => {
       navigation.jumpToIndex(newProjectIndex);
     }
   };
+
+  const { green } = colors
 
   // Helper function to validate if clipboard contains a git URL
   const isValidGitUrl = (url) => {
@@ -432,11 +435,11 @@ const App = () => {
           <Text>{'\x1Bc'}</Text>
         </Box>
         <Box flexDirection="column" padding={1}>
-          <Text color="yellow">
+          <Text color={green}>
             {loading ? '⏳ Loading configuration...' : '🔍 Scanning for projects...'}
           </Text>
           {configuration?.projectPath && (
-            <Text color="gray">Directory: {configuration.projectPath}</Text>
+            <Text color={green}>Directory: {configuration.projectPath}</Text>
           )}
         </Box>
       </>
@@ -452,7 +455,7 @@ const App = () => {
         <Box flexDirection="column" padding={1}>
           <Text color="red">✗ {error}</Text>
           <Box marginTop={1}>
-            <Text color="gray">
+            <Text color={green}>
               Press <Text bold>C</Text> to reconfigure or <Text bold>q</Text> to quit
             </Text>
           </Box>
@@ -468,16 +471,17 @@ const App = () => {
       </Box>
       <Box flexDirection="column" height={size.height} width={size.width} padding={1}>
 
+
         <Box flexDirection="column" marginBottom={1}>
 
           <Box flexDirection='row' justifyContent='space-between' marginBottom={1}>
-            <Text bold underline color="green">
+            <Text bold underline color={green}>
               Projects: {selectedIndex + 1}/{filteredProjects.length}
-              {searchQuery && <Text color="yellow"> (filtered)</Text>}
+              {searchQuery && <Text color={green}> (filtered)</Text>}
             </Text>
             <Box gap={1}>
-              <Text bold color="green">Varu</Text>
-              <Text dimColor color="green">{VERSION}</Text>
+              <Text bold color={green}>Varu</Text>
+              <Text dimColor color={green}>{VERSION}</Text>
             </Box>
           </Box>
 
@@ -532,14 +536,14 @@ const App = () => {
           )}
 
           {filteredProjects.length === 0 ? (
-            <Text color="yellow">
+            <Text color={green}>
               {searchQuery ? `No projects match "${searchQuery}"` : 'No projects found'}
             </Text>
           ) : (
             <>
               {scrollOffset > 0 && (
                 <Box marginLeft={1}>
-                  <Text color="gray">↑ {scrollOffset} more above...</Text>
+                  <Text color={green}>↑ {scrollOffset} more above...</Text>
                 </Box>
               )}
 
@@ -556,7 +560,7 @@ const App = () => {
 
               {scrollOffset + VISIBLE_ITEMS < filteredProjects.length && (
                 <Box marginLeft={1}>
-                  <Text color="gray">
+                  <Text color={green}>
                     ↓ {filteredProjects.length - (scrollOffset + VISIBLE_ITEMS)} more below...
                   </Text>
                 </Box>

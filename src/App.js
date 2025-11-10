@@ -52,7 +52,7 @@ const App = () => {
 
   // Navigation and search hooks (need VISIBLE_ITEMS first)
   const navigation = useProjectNavigation(projects, VISIBLE_ITEMS);
-  const { searchMode, searchQuery, filteredProjects, handleSearchSubmit, handleSearchCancel, clearSearch, openSearch } = useSearchMode(projects, navigation);
+  const { searchMode, searchQuery, filteredProjects, handleSearchChange, handleSearchSubmit, handleSearchCancel, clearSearch, openSearch } = useSearchMode(projects, navigation);
 
   // Callback for when clone auto-refresh finds the new project
   const handleCloneRefresh = (sortedProjects, newProjectIndex) => {
@@ -489,6 +489,7 @@ const App = () => {
             <SearchInput
               onSubmit={handleSearchSubmit}
               onCancel={handleSearchCancel}
+              onChange={handleSearchChange}
               initialValue={searchQuery}
             />
           )}

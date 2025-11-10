@@ -6,10 +6,12 @@ import { useState, useEffect } from 'react';
 export const useSearchMode = (projects, navigation) => {
   const [searchMode, setSearchMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [liveSearchQuery, setLiveSearchQuery] = useState('');
 
-  const filteredProjects = searchQuery
+  const activeQuery = searchMode ? liveSearchQuery : searchQuery;
+  const filteredProjects = activeQuery
     ? projects.filter(project =>
-      project.projectName.toLowerCase().includes(searchQuery.toLowerCase())
+      project.projectName.toLowerCase().includes(activeQuery.toLowerCase())
     )
     : projects;
 
@@ -20,12 +22,18 @@ export const useSearchMode = (projects, navigation) => {
     }
   }, [searchQuery, filteredProjects.length, navigation]);
 
+  const handleSearchChange = (query) => {
+    setLiveSearchQuery(query);
+  };
+
   const handleSearchSubmit = (query) => {
     setSearchQuery(query);
+    setLiveSearchQuery('');
     setSearchMode(false);
   };
 
   const handleSearchCancel = () => {
+    setLiveSearchQuery('');
     setSearchMode(false);
   };
 
@@ -42,6 +50,7 @@ export const useSearchMode = (projects, navigation) => {
     searchMode,
     searchQuery,
     filteredProjects,
+    handleSearchChange,
     handleSearchSubmit,
     handleSearchCancel,
     clearSearch,

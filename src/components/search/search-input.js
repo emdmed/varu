@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
+import { colors } from '../../utils/colors';
 
-const SearchInput = ({ onSubmit, onCancel, initialValue = '' }) => {
+const SearchInput = ({ onSubmit, onCancel, onChange, initialValue = '' }) => {
   const [value, setValue] = useState(initialValue);
+  const { green } = colors
 
   useInput((input, key) => {
     if (key.return) {
@@ -10,22 +12,30 @@ const SearchInput = ({ onSubmit, onCancel, initialValue = '' }) => {
     } else if (key.escape) {
       onCancel();
     } else if (key.backspace || key.delete) {
-      setValue(prev => prev.slice(0, -1));
+      setValue(prev => {
+        const newValue = prev.slice(0, -1);
+        onChange?.(newValue);
+        return newValue;
+      });
     } else if (!key.ctrl && !key.meta && input) {
       // Only add printable characters
-      setValue(prev => prev + input);
+      setValue(prev => {
+        const newValue = prev + input;
+        onChange?.(newValue);
+        return newValue;
+      });
     }
   });
 
   return (
-    <Box flexDirection="column" marginBottom={1} paddingX={1}>
+    <Box borderStyle="round" borderColor={green} flexDirection="column" marginBottom={1} paddingX={1}>
       <Box>
-        <Text>Filter:{" "}</Text>
-        <Text>{value}</Text>
-        <Text>█</Text>
+        <Text color={green}>Filter:{" "}</Text>
+        <Text color={green}>{value}</Text>
+        <Text color={green}>█</Text>
       </Box>
       <Box marginTop={0}>
-        <Text dimColor>Press Enter to search, Esc to cancel</Text>
+        <Text dimColor>Esc to cancel</Text>
       </Box>
     </Box>
   );

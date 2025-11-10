@@ -471,13 +471,13 @@ const App = () => {
         <Box flexDirection="column" marginBottom={1}>
 
           <Box flexDirection='row' justifyContent='space-between' marginBottom={1}>
-            <Text bold underline>
+            <Text bold underline color="green">
               Projects: {selectedIndex + 1}/{filteredProjects.length}
               {searchQuery && <Text color="yellow"> (filtered)</Text>}
             </Text>
             <Box gap={1}>
-              <Text bold>Varu</Text>
-              <Text dimColor>{VERSION}</Text>
+              <Text bold color="green">Varu</Text>
+              <Text dimColor color="green">{VERSION}</Text>
             </Box>
           </Box>
 

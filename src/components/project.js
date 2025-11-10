@@ -44,11 +44,11 @@ const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeMod
       key={actualIndex}
     >
       <Box gap={1}>
-        <Text inverse={isSelected || isRunning} bold color={isRunning ? "green" : "white"} >
+        <Text inverse={isSelected || isRunning} bold={isRunning} color="green" >
           {isSelected ? "▶ " : "  "}{getStatusIcon()}{" "}{project.projectName}{" "}
         </Text>
         {project.framework && (
-          <Text bold={isSelected} color="gray">
+          <Text bold={isSelected} color="green" dimColor>
             ({project.framework})
           </Text>
         )}

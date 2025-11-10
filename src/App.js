@@ -164,7 +164,6 @@ const App = () => {
     if (input === 'r') {
       setScanning(true);
       navigation.reset();
-      setNodeModulesSizes({});
       clearSearch();
       cancelAutoRefresh();
       findPackageJsonFiles(configuration.projectPath)
@@ -173,10 +172,18 @@ const App = () => {
             a.projectName.localeCompare(b.projectName, undefined, { sensitivity: 'base' })
           );
           setProjects(sortedProjects);
+
+          // Only scan projects that don't have cached sizes
+          const projectsNeedingScan = sortedProjects.filter(
+            p => !nodeModulesSizes[p.path]
+          );
+
+          if (projectsNeedingScan.length > 0) {
+            scanAllNodeModules();
+          }
         })
         .finally(() => {
           setScanning(false);
-          scanAllNodeModules();
         });
     }
 

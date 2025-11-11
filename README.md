@@ -2,6 +2,8 @@
 
 A terminal-based development dashboard for managing and monitoring your Node.js projects.
 
+<img width="935" height="319" alt="screenshot-2025-11-10_20-08-41" src="https://github.com/user-attachments/assets/737f0711-34fa-41f9-94d0-b1d2aa371776" />
+
 ## Overview
 
 Varu CLI is an interactive command-line interface built with React and Ink that helps developers manage multiple projects from a single dashboard. It provides a centralized view of all your projects, monitors running development servers, and offers quick access to common development tasks.

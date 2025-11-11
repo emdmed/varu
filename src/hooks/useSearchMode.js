@@ -20,7 +20,7 @@ export const useSearchMode = (projects, navigation) => {
     if (searchQuery && filteredProjects.length > 0) {
       navigation.reset();
     }
-  }, [searchQuery, filteredProjects.length, navigation]);
+  }, [searchQuery]);
 
   const handleSearchChange = (query) => {
     setLiveSearchQuery(query);

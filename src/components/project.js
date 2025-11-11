@@ -26,15 +26,13 @@ const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeMod
   const isRunning = processInfo && processInfo.hasDevServer
   const hasEditor = processInfo && processInfo.hasEditor
   const isChecked = checkedProjects?.has(project.path) ?? false;
-  const { amber, green, lime, violet, cyan } = colors
+  const { amber, green, violet } = colors
 
-  // Find port by matching PIDs
   const getProjectPort = () => {
     if (!isRunning || !processInfo || !processInfo.pids || !portToPidMap) return null;
 
     const projectPids = processInfo.pids;
 
-    // Find port whose PID matches one of this project's PIDs
     for (const [port, pid] of Object.entries(portToPidMap)) {
       if (projectPids.includes(Number(pid))) {
         return Number(port);
@@ -47,8 +45,8 @@ const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeMod
   const projectPort = getProjectPort();
 
   const getStatusIcon = () => {
-    if (!isChecked) return '◐';
-    if (isRunning) return '●'
+    if (!isChecked) return <Spinner type="dots2" />;
+    if (isRunning) return <Spinner type="arc" />
 
     return '○';
   };
@@ -65,7 +63,7 @@ const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeMod
     >
       <Box gap={1}>
         <Text inverse={isSelected || isRunning} bold={isRunning} color={green} >
-          {isSelected ? "▶ " : "  "}{getStatusIcon()}{" "}{project.projectName}{" "}
+          {isSelected ? "▶" : " "}{getStatusIcon()}{" "}{project.projectName}{" "}
         </Text>
         {project.framework && (
           <Text bold={isSelected} color={green} dimColor>

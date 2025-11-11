@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
+import { colors } from '../../utils/colors';
 
 const CloneInput = ({ onSubmit, onCancel, initialValue = '' }) => {
   const [value, setValue] = useState(initialValue);
+  const { green } = colors
 
   useInput((input, key) => {
     if (key.return) {
@@ -20,14 +22,14 @@ const CloneInput = ({ onSubmit, onCancel, initialValue = '' }) => {
   });
 
   return (
-    <Box borderDimColor borderStyle="classic" flexDirection="column" marginBottom={1} paddingX={1}>
+    <Box borderDimColor borderColor={green} borderStyle="classic" flexDirection="column" marginBottom={1} paddingX={1}>
       <Box>
-        <Text color="cyan">Clone Git URL:{" "}</Text>
-        <Text>{value}</Text>
-        <Text>█</Text>
+        <Text color={green}>Clone Git URL:{" "}</Text>
+        <Text color={green}>{value}</Text>
+        <Text color={green}>█</Text>
       </Box>
       <Box marginTop={0}>
-        <Text dimColor>Paste the git URL (https or ssh) and press Enter. Esc to cancel</Text>
+        <Text color={green} dimColor>Paste the git URL (https or ssh) and press Enter. Esc to cancel</Text>
       </Box>
     </Box>
   );

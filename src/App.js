@@ -37,7 +37,6 @@ const App = () => {
   const { exit } = useApp();
   const size = useScreenSize();
 
-  // View and UI state
   const [view, setView] = useState('list');
   const [helpMode, setHelpMode] = useState(false);
   const [showKeybindings, setShowKeybindings] = useState(false);
@@ -47,28 +46,23 @@ const App = () => {
   const [projectToDelete, setProjectToDelete] = useState(null);
   const [clipboardUrl, setClipboardUrl] = useState('');
 
-  // Custom hooks
   const { projects, setProjects, scanning, setScanning, error, setError } = useProjectScanner(configuration, isConfig);
   const { runningProcesses, setRunningProcesses, checkedProjects, isInitialScan } = useProcessMonitor(projects);
   const { nodeModulesSizes, setNodeModulesSizes, scanAllNodeModules, scanningNodeModules } = useNodeModulesScanner(projects, configSizes, reloadConfig);
   const { portToPidMap } = usePortMonitor();
   const { checkDoubleTap } = useKeyboardShortcuts();
 
-  // Calculate visible items for display
-  // Header (1) + footer (2) + padding (2) + error/search bars (dynamic)
-  const headerLines = 1; // Project count line
-  const footerLines = 2; // Port display + keybindings/help text
-  const paddingLines = 2; // Top and bottom padding
-  const scrollIndicatorLines = 2; // Up/down scroll indicators
+  const headerLines = 1;
+  const footerLines = 2;
+  const paddingLines = 2;
+  const scrollIndicatorLines = 2;
   const reservedLines = headerLines + footerLines + paddingLines + scrollIndicatorLines;
   const availableLines = Math.max(5, size.height - reservedLines);
   const VISIBLE_ITEMS = Math.max(5, availableLines);
 
-  // Navigation and search hooks (need VISIBLE_ITEMS first)
   const navigation = useProjectNavigation(projects, VISIBLE_ITEMS);
   const { searchMode, searchQuery, filteredProjects, handleSearchChange, handleSearchSubmit, handleSearchCancel, clearSearch, openSearch } = useSearchMode(projects, navigation);
 
-  // Callback for when clone auto-refresh finds the new project
   const handleCloneRefresh = (sortedProjects, newProjectIndex) => {
     setProjects(sortedProjects);
     if (newProjectIndex !== -1) {
@@ -78,7 +72,6 @@ const App = () => {
 
   const { green } = colors
 
-  // Helper function to validate if clipboard contains a git URL
   const isValidGitUrl = (url) => {
     if (!url || typeof url !== 'string') return false;
     const trimmed = url.trim();
@@ -90,7 +83,6 @@ const App = () => {
     );
   };
 
-  // Read clipboard and open clone mode with pre-filled URL if valid
   const handleOpenCloneMode = async () => {
     try {
       const clipboardContent = await clipboardy.read();
@@ -100,7 +92,6 @@ const App = () => {
         setClipboardUrl('');
       }
     } catch (err) {
-      // Silently fail - user can still manually paste
       setClipboardUrl('');
     }
     openCloneMode();
@@ -112,7 +103,6 @@ const App = () => {
 
   const { selectedIndex, scrollOffset } = navigation;
 
-  // Wrapper to reset clipboard URL when cancelling clone
   const handleCloneCancelWrapper = () => {
     setClipboardUrl('');
     handleCloneCancel();
@@ -127,7 +117,6 @@ const App = () => {
     if (deleteMode) return;
     if (helpMode) return;
 
-    // Navigation
     if (key.upArrow || input === 'k') {
       navigation.navigateUp();
     }
@@ -207,7 +196,6 @@ const App = () => {
           );
           setProjects(sortedProjects);
 
-          // Only scan projects that don't have cached sizes
           const projectsNeedingScan = sortedProjects.filter(
             p => !nodeModulesSizes[p.path]
           );
@@ -255,13 +243,12 @@ const App = () => {
 
   const handleCloneSubmitWrapper = async (url) => {
     setError(null);
-    setClipboardUrl(''); // Reset clipboard URL after submission
+    setClipboardUrl('');
 
     try {
       const result = await handleCloneSubmit(url);
 
       if (result.type === 'success') {
-        // Non-interactive clone completed
         setScanning(true);
         setNodeModulesSizes({});
         findPackageJsonFiles(configuration.projectPath)
@@ -285,7 +272,6 @@ const App = () => {
             setScanning(false);
           });
       }
-      // Interactive clone is handled by the hook's auto-refresh
     } catch (err) {
       setError(`Clone failed: ${err.message}`);
       setTimeout(() => setError(null), 5000);
@@ -299,7 +285,6 @@ const App = () => {
       const result = await handleCreateSubmit(projectType);
 
       if (result.type === 'success') {
-        // Non-interactive create completed
         setScanning(true);
         setNodeModulesSizes({});
         findPackageJsonFiles(configuration.projectPath)
@@ -316,7 +301,6 @@ const App = () => {
             setScanning(false);
           });
       }
-      // Interactive create is handled by the hook's auto-refresh
     } catch (err) {
       setError(`Create failed: ${err.message}`);
       setTimeout(() => setError(null), 5000);
@@ -376,7 +360,6 @@ const App = () => {
     const result = await deleteProject(projectToDelete.path);
 
     if (result.success) {
-      // Rescan projects after deletion
       setScanning(true);
       navigation.reset();
       clearSearch();
@@ -388,7 +371,6 @@ const App = () => {
           );
           setProjects(sortedProjects);
 
-          // Rescan node_modules
           const projectsNeedingScan = sortedProjects.filter(
             p => !nodeModulesSizes[p.path]
           );

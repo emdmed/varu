@@ -27,6 +27,7 @@ const HelpScreen = () => {
 
         <Text bold color={green}>Repository:</Text>
         <Text>  c           - Clone git repository</Text>
+        <Text>  n           - Create new project (Next.js/Vite)</Text>
         <Text>  r           - Refresh project list</Text>
         <Text dimColor />
 

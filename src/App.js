@@ -8,6 +8,7 @@ import { useProcessMonitor } from './hooks/useProcessMonitor.js';
 import { useNodeModulesScanner } from './hooks/useNodeModulesScanner.js';
 import { useSearchMode } from './hooks/useSearchMode.js';
 import { useCloneMode } from './hooks/useCloneMode.js';
+import { useCreateMode } from './hooks/useCreateMode.js';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.js';
 import { usePortMonitor } from './hooks/usePortMonitor.js';
 import ConfigurationComponent from './components/configuration/configuration-component.js';
@@ -21,6 +22,7 @@ import { validateProjectReadiness } from './utils/project-validator.js';
 import Project from './components/project.js';
 import SearchInput from './components/search/search-input.js';
 import CloneInput from './components/clone/clone-input.js';
+import CreateProjectInput from './components/create/create-nextjs-input.js';
 import CleanupConfirm from './components/cleanup/cleanup-confirm.js';
 import HelpScreen from './components/help-screen.js';
 import { deleteNodeModules, formatBytes, getStaleProjects } from './utils/node-modules-cleaner.js';
@@ -102,6 +104,8 @@ const App = () => {
 
   const { cloneMode, autoRefreshMode, handleCloneSubmit, handleCloneCancel, openCloneMode, cancelAutoRefresh } = useCloneMode(configuration, VISIBLE_ITEMS, handleCloneRefresh);
 
+  const { createMode, autoRefreshMode: createAutoRefreshMode, handleCreateSubmit, handleCreateCancel, openCreateMode, cancelAutoRefresh: cancelCreateAutoRefresh } = useCreateMode(configuration, VISIBLE_ITEMS, handleCloneRefresh);
+
   const { selectedIndex, scrollOffset } = navigation;
 
   // Wrapper to reset clipboard URL when cancelling clone
@@ -114,6 +118,7 @@ const App = () => {
     if (view === 'config') return;
     if (searchMode) return;
     if (cloneMode) return;
+    if (createMode) return;
     if (cleanupMode) return;
 
     if (helpMode) {
@@ -169,6 +174,10 @@ const App = () => {
       handleOpenCloneMode();
     }
 
+    if (input === 'n') {
+      openCreateMode();
+    }
+
     if (input === 'C') {
       setView('config');
     }
@@ -182,6 +191,7 @@ const App = () => {
       navigation.reset();
       clearSearch();
       cancelAutoRefresh();
+      cancelCreateAutoRefresh();
       findPackageJsonFiles(configuration.projectPath)
         .then((foundProjects) => {
           const sortedProjects = foundProjects.sort((a, b) =>
@@ -203,8 +213,13 @@ const App = () => {
         });
     }
 
-    if (input === 'x' && autoRefreshMode) {
-      cancelAutoRefresh();
+    if (input === 'x') {
+      if (autoRefreshMode) {
+        cancelAutoRefresh();
+      }
+      if (createAutoRefreshMode) {
+        cancelCreateAutoRefresh();
+      }
     }
 
     if (input === 'm' || input === 'S') {
@@ -265,6 +280,37 @@ const App = () => {
       // Interactive clone is handled by the hook's auto-refresh
     } catch (err) {
       setError(`Clone failed: ${err.message}`);
+      setTimeout(() => setError(null), 5000);
+    }
+  };
+
+  const handleCreateSubmitWrapper = async (projectType) => {
+    setError(null);
+
+    try {
+      const result = await handleCreateSubmit(projectType);
+
+      if (result.type === 'success') {
+        // Non-interactive create completed
+        setScanning(true);
+        setNodeModulesSizes({});
+        findPackageJsonFiles(configuration.projectPath)
+          .then((foundProjects) => {
+            const sortedProjects = foundProjects.sort((a, b) =>
+              a.projectName.localeCompare(b.projectName, undefined, { sensitivity: 'base' })
+            );
+            setProjects(sortedProjects);
+          })
+          .catch((err) => {
+            setError(`Error scanning projects: ${err.message}`);
+          })
+          .finally(() => {
+            setScanning(false);
+          });
+      }
+      // Interactive create is handled by the hook's auto-refresh
+    } catch (err) {
+      setError(`Create failed: ${err.message}`);
       setTimeout(() => setError(null), 5000);
     }
   };
@@ -528,6 +574,13 @@ const App = () => {
             />
           )}
 
+          {createMode && (
+            <CreateProjectInput
+              onSubmit={handleCreateSubmitWrapper}
+              onCancel={handleCreateCancel}
+            />
+          )}
+
           {cleanupMode && (
             <CleanupConfirm
               staleProjects={staleProjects.map(p => ({
@@ -615,7 +668,7 @@ const App = () => {
           {showKeybindings ? (
             <Box>
               <Text color="gray">
-                j/k: Navigate | gg/G: Jump top/bottom | Enter: nvim | s: Server | /: Search | dd: Cleanup | c: Clone | I: Install | m: Scan | r: Refresh | C: Config | h: Help | ?: Toggle Keys | q: Quit
+                j/k: Navigate | gg/G: Jump top/bottom | Enter: nvim | s: Server | /: Search | dd: Cleanup | c: Clone | n: New Project | I: Install | m: Scan | r: Refresh | C: Config | h: Help | ?: Toggle Keys | q: Quit
               </Text>
             </Box>
           ) : (

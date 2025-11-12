@@ -18,7 +18,7 @@ const formatSize = (sizeFormatted) => {
   return sizeFormatted ? sizeFormatted.replace(/\s+/g, '') : '';
 };
 
-const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeModulesSizes, project, checkedProjects, portToPidMap }) => {
+const Project = React.memo(({ scrollOffset, index, selectedIndex, runningProcesses, nodeModulesSizes, project, checkedProjects, portToPidMap, scanningNodeModules }) => {
   const actualIndex = scrollOffset + index;
   const isSelected = actualIndex === selectedIndex;
   const processInfo = runningProcesses[project.path];
@@ -78,14 +78,14 @@ const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeMod
         {hasEditor && (
           <Text inverse={isSelected} dimColor color={green}>[vim]</Text>
         )}
-        {shouldShowDeps(modulesInfo) && (
+        {shouldShowDeps(modulesInfo) && !scanningNodeModules && (
           <Text inverse={isSelected} color={violet}>deps {formatSize(modulesInfo.sizeFormatted)}</Text>
         )}
-        {modulesInfo === undefined && <Text color={violet}>deps <Spinner /></Text>}
+        {(modulesInfo === undefined || scanningNodeModules) && <Text color={violet}>deps <Spinner /></Text>}
         <Text inverse={isSelected} color={amber}>[{getBranchDisplay(project.gitBranch)}]</Text>
       </Box>
     </Box>
   )
-}
+})
 
 export default Project

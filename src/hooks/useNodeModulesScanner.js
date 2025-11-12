@@ -24,7 +24,8 @@ export const useNodeModulesScanner = (projects, configSizes, reloadConfig) => {
     setScanningNodeModules(true);
     setScanProgress({ current: 0, total: projects.length });
 
-    const newSizes = {};
+    // Start with existing sizes and update as we scan
+    const newSizes = { ...nodeModulesSizes };
 
     try {
       for (let i = 0; i < projects.length; i++) {
@@ -48,8 +49,8 @@ export const useNodeModulesScanner = (projects, configSizes, reloadConfig) => {
           };
         }
 
+        // Only update scan progress, not the sizes state
         setScanProgress({ current: i + 1, total: projects.length });
-        setNodeModulesSizes({ ...newSizes });
 
         const elapsed = Date.now() - startTime;
         if (elapsed < 300) {
@@ -57,9 +58,12 @@ export const useNodeModulesScanner = (projects, configSizes, reloadConfig) => {
         }
       }
 
+      // Update node modules sizes only once after all scans complete
+      setNodeModulesSizes(newSizes);
+
       console.log('Saving', Object.keys(newSizes).length, 'sizes to config');
       await saveNodeModulesSizes(newSizes);
-      await reloadConfig();
+      // Config reload is unnecessary since we already have the data in state
     } catch (err) {
       console.error('Scan error:', err);
       throw err;
@@ -67,7 +71,7 @@ export const useNodeModulesScanner = (projects, configSizes, reloadConfig) => {
       setScanningNodeModules(false);
       setScanProgress({ current: 0, total: 0 });
     }
-  }, [projects, scanningNodeModules, reloadConfig]);
+  }, [projects, scanningNodeModules, nodeModulesSizes]);
 
   // Auto-scan on first load if no sizes exist
   useEffect(() => {

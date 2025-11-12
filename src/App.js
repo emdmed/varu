@@ -50,7 +50,7 @@ const App = () => {
   // Custom hooks
   const { projects, setProjects, scanning, setScanning, error, setError } = useProjectScanner(configuration, isConfig);
   const { runningProcesses, setRunningProcesses, checkedProjects, isInitialScan } = useProcessMonitor(projects);
-  const { nodeModulesSizes, setNodeModulesSizes, scanAllNodeModules } = useNodeModulesScanner(projects, configSizes, reloadConfig);
+  const { nodeModulesSizes, setNodeModulesSizes, scanAllNodeModules, scanningNodeModules } = useNodeModulesScanner(projects, configSizes, reloadConfig);
   const { portToPidMap } = usePortMonitor();
   const { checkDoubleTap } = useKeyboardShortcuts();
 
@@ -705,6 +705,7 @@ const App = () => {
                 scrollOffset={scrollOffset}
                 checkedProjects={checkedProjects}
                 portToPidMap={portToPidMap}
+                scanningNodeModules={scanningNodeModules}
               />)}
 
               {scrollOffset + VISIBLE_ITEMS < filteredProjects.length && (

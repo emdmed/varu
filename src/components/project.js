@@ -18,7 +18,7 @@ const formatSize = (sizeFormatted) => {
   return sizeFormatted ? sizeFormatted.replace(/\s+/g, '') : '';
 };
 
-const Project = React.memo(({ scrollOffset, index, selectedIndex, runningProcesses, nodeModulesSizes, project, checkedProjects, portToPidMap, scanningNodeModules }) => {
+const Project = ({ scrollOffset, index, selectedIndex, runningProcesses, nodeModulesSizes, project, checkedProjects, portToPidMap, scanningNodeModules }) => {
   const actualIndex = scrollOffset + index;
   const isSelected = actualIndex === selectedIndex;
   const processInfo = runningProcesses[project.path];
@@ -44,13 +44,6 @@ const Project = React.memo(({ scrollOffset, index, selectedIndex, runningProcess
 
   const projectPort = getProjectPort();
 
-  const getStatusIcon = () => {
-    if (!isChecked) return <Spinner type="dots2" />;
-    if (isRunning) return <Spinner type="arc" />
-
-    return '○';
-  };
-
   const borderStyle = isSelected ? "" : ""
   const borderColor = isSelected ? undefined : green
 
@@ -62,8 +55,14 @@ const Project = React.memo(({ scrollOffset, index, selectedIndex, runningProcess
       key={actualIndex}
     >
       <Box gap={1}>
-        <Text inverse={isSelected || isRunning} bold={isRunning} color={green} >
-          {isSelected ? "▶" : " "}{getStatusIcon()}{" "}{project.projectName}{" "}
+        <Text bold={isRunning} color={green} >
+          {isSelected ? "▶" : " "}
+        </Text>
+        {!isChecked && <Text color={green}><Spinner type="dots2" /></Text>}
+        {isChecked && isRunning && <Text color={green}><Spinner type="arc" /></Text>}
+        {isChecked && !isRunning && <Text color={green} dimColor>○</Text>}
+        <Text inverse={isRunning || isSelected} color={green} >
+          {" "}{project.projectName}{" "}
         </Text>
         {project.framework && (
           <Text bold={isSelected} color={green} dimColor>
@@ -86,6 +85,6 @@ const Project = React.memo(({ scrollOffset, index, selectedIndex, runningProcess
       </Box>
     </Box>
   )
-})
+}
 
 export default Project

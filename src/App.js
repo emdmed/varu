@@ -30,7 +30,7 @@ import { deleteNodeModules, formatBytes, getStaleProjects } from './utils/node-m
 import { deleteProject } from './utils/project-deleter.js';
 import { colors } from './utils/colors.js';
 
-const VERSION = "0.0.14"
+const VERSION = "0.0.15"
 
 const App = () => {
   const { configuration, isConfig, loading, nodeModulesSizes: configSizes, projectLastStarted, reloadConfig } = useConfig();

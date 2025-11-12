@@ -34,6 +34,7 @@ const HelpScreen = () => {
         <Text bold color={green}>Maintenance:</Text>
         <Text>  m           - Scan all node_modules sizes</Text>
         <Text>  dd          - Cleanup stale dependencies (30+ days)</Text>
+        <Text>  Shift+D     - Delete current project (with confirmation)</Text>
         <Text dimColor />
 
         <Text bold color={green}>System:</Text>

@@ -24,8 +24,10 @@ import SearchInput from './components/search/search-input.js';
 import CloneInput from './components/clone/clone-input.js';
 import CreateProjectInput from './components/create/create-nextjs-input.js';
 import CleanupConfirm from './components/cleanup/cleanup-confirm.js';
+import DeleteConfirm from './components/delete/delete-confirm.js';
 import HelpScreen from './components/help-screen.js';
 import { deleteNodeModules, formatBytes, getStaleProjects } from './utils/node-modules-cleaner.js';
+import { deleteProject } from './utils/project-deleter.js';
 import { colors } from './utils/colors.js';
 
 const VERSION = "0.0.13"
@@ -41,6 +43,8 @@ const App = () => {
   const [showKeybindings, setShowKeybindings] = useState(false);
   const [cleanupMode, setCleanupMode] = useState(false);
   const [staleProjects, setStaleProjects] = useState([]);
+  const [deleteMode, setDeleteMode] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState(null);
   const [clipboardUrl, setClipboardUrl] = useState('');
 
   // Custom hooks
@@ -120,6 +124,7 @@ const App = () => {
     if (cloneMode) return;
     if (createMode) return;
     if (cleanupMode) return;
+    if (deleteMode) return;
 
     if (helpMode) {
       setHelpMode(false);
@@ -149,6 +154,13 @@ const App = () => {
         const stale = getStaleProjects(projects, nodeModulesSizes, projectLastStarted, runningProcesses);
         setStaleProjects(stale);
         setCleanupMode(true);
+      }
+    }
+
+    if (input === 'D') {
+      if (filteredProjects[selectedIndex]) {
+        setProjectToDelete(filteredProjects[selectedIndex]);
+        setDeleteMode(true);
       }
     }
 
@@ -355,6 +367,54 @@ const App = () => {
 
   const handleCleanupCancel = () => {
     setCleanupMode(false);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!projectToDelete) {
+      setDeleteMode(false);
+      return;
+    }
+
+    setDeleteMode(false);
+
+    const result = await deleteProject(projectToDelete.path);
+
+    if (result.success) {
+      // Rescan projects after deletion
+      setScanning(true);
+      navigation.reset();
+      clearSearch();
+
+      findPackageJsonFiles(configuration.projectPath)
+        .then((foundProjects) => {
+          const sortedProjects = foundProjects.sort((a, b) =>
+            a.projectName.localeCompare(b.projectName, undefined, { sensitivity: 'base' })
+          );
+          setProjects(sortedProjects);
+
+          // Rescan node_modules
+          const projectsNeedingScan = sortedProjects.filter(
+            p => !nodeModulesSizes[p.path]
+          );
+
+          if (projectsNeedingScan.length > 0) {
+            scanAllNodeModules();
+          }
+        })
+        .finally(() => {
+          setScanning(false);
+          setProjectToDelete(null);
+        });
+    } else {
+      setError(`Failed to delete project: ${result.error}`);
+      setTimeout(() => setError(null), 5000);
+      setProjectToDelete(null);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteMode(false);
+    setProjectToDelete(null);
   };
 
   const openProject = async (project) => {
@@ -594,6 +654,14 @@ const App = () => {
               )}
               onConfirm={handleCleanupConfirm}
               onCancel={handleCleanupCancel}
+            />
+          )}
+
+          {deleteMode && projectToDelete && (
+            <DeleteConfirm
+              project={projectToDelete}
+              onConfirm={handleDeleteConfirm}
+              onCancel={handleDeleteCancel}
             />
           )}
 

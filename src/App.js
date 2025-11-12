@@ -29,8 +29,9 @@ import HelpScreen from './components/help-screen.js';
 import { deleteNodeModules, formatBytes, getStaleProjects } from './utils/node-modules-cleaner.js';
 import { deleteProject } from './utils/project-deleter.js';
 import { colors } from './utils/colors.js';
+import packageJson from '../package.json' with { type: 'json' };
 
-const VERSION = "0.0.15"
+const VERSION = packageJson.version;
 
 const App = () => {
   const { configuration, isConfig, loading, nodeModulesSizes: configSizes, projectLastStarted, reloadConfig } = useConfig();

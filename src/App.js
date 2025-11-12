@@ -125,11 +125,7 @@ const App = () => {
     if (createMode) return;
     if (cleanupMode) return;
     if (deleteMode) return;
-
-    if (helpMode) {
-      setHelpMode(false);
-      return;
-    }
+    if (helpMode) return;
 
     // Navigation
     if (key.upArrow || input === 'k') {
@@ -665,9 +661,9 @@ const App = () => {
             />
           )}
 
-          {helpMode && <HelpScreen />}
+          {helpMode && <HelpScreen onClose={() => setHelpMode(false)} />}
 
-          {searchQuery && !searchMode && (
+          {!helpMode && searchQuery && !searchMode && (
             <Box marginBottom={1}>
               <Text inverse dimColor>
                 {" "}Filter: "{searchQuery}" ({filteredProjects.length} result{filteredProjects.length !== 1 ? 's' : ''})
@@ -677,17 +673,17 @@ const App = () => {
             </Box>
           )}
 
-          {error && (
+          {!helpMode && error && (
             <Box marginBottom={1}>
               <Text color="red">✗ {error}</Text>
             </Box>
           )}
 
-          {filteredProjects.length === 0 ? (
+          {!helpMode && filteredProjects.length === 0 ? (
             <Text color={green}>
               {searchQuery ? `No projects match "${searchQuery}"` : 'No projects found'}
             </Text>
-          ) : (
+          ) : !helpMode ? (
             <>
               {scrollOffset > 0 && (
                 <Box marginLeft={1}>
@@ -716,7 +712,7 @@ const App = () => {
                 </Box>
               )}
             </>
-          )}
+          ) : null}
         </Box>
 
         <Box flexDirection="column" flexShrink={0}>
